@@ -3,8 +3,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    webview::{NewWindowResponse, PageLoadEvent},
-    Manager, WebviewUrl, WebviewWindowBuilder,
+    webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
+    LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
 const CHAT_URL: &str = "https://chat.google.com/";
@@ -16,14 +16,13 @@ static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 const PEEK_WIDTH: f64 = 520.0;
 const PEEK_HEIGHT: f64 = 420.0;
-const PEEK_MARGIN: f64 = 24.0;
+const PEEK_MARGIN: f64 = 16.0;
 
-/// JavaScript injected into peek windows that renders a floating toolbar
-/// with "Pop Out" and "Close" buttons. Button clicks navigate to sentinel
-/// URLs that are intercepted by `on_navigation` on the Rust side.
+/// JavaScript injected into peek webviews to render a floating toolbar with
+/// "Pop Out" and "Close" buttons. Buttons navigate to sentinel URLs that
+/// `on_navigation` intercepts on the Rust side.
 const PEEK_TOOLBAR_JS: &str = r#"
 (function() {
-    if (document.getElementById('_peek_toolbar')) return;
     function inject() {
         if (document.getElementById('_peek_toolbar') || !document.body) return;
         var bar = document.createElement('div');
@@ -49,9 +48,7 @@ const PEEK_TOOLBAR_JS: &str = r#"
         document.body.appendChild(bar);
         document.body.style.paddingBottom = '44px';
     }
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', inject);
-    }
+    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', inject); }
     inject();
     window.addEventListener('load', inject);
 })();
@@ -61,6 +58,7 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let app_handle = app.handle().clone();
+            let app_resize = app.handle().clone();
 
             WebviewWindowBuilder::new(
                 app,
@@ -73,10 +71,19 @@ pub fn run() {
             .resizable(true)
             .user_agent(SAFARI_USER_AGENT)
             .on_new_window(move |url, _| {
-                create_peek_window(&app_handle, url);
+                create_peek_overlay(&app_handle, url);
                 NewWindowResponse::Deny
             })
             .build()?;
+
+            // Reposition peek overlay when the main window resizes
+            if let Some(main_win) = app.get_window("main") {
+                main_win.on_window_event(move |event| {
+                    if matches!(event, tauri::WindowEvent::Resized(_)) {
+                        reposition_peek(&app_resize);
+                    }
+                });
+            }
 
             let reload = MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?;
             let back = MenuItem::with_id(app, "back", "Back", true, Some("CmdOrCtrl+["))?;
@@ -136,16 +143,19 @@ pub fn run() {
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "reload" => {
-                let window = get_active_window(app);
-                let _ = window.eval("window.location.reload()");
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.eval("window.location.reload()");
+                }
             }
             "back" => {
-                let window = get_active_window(app);
-                let _ = window.eval("history.back()");
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.eval("history.back()");
+                }
             }
             "forward" => {
-                let window = get_active_window(app);
-                let _ = window.eval("history.forward()");
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.eval("history.forward()");
+                }
             }
             "icon-color" => set_main_window_icon(app, COLOR_ICON),
             "icon-dark" => set_main_window_icon(app, DARK_ICON),
@@ -157,114 +167,124 @@ pub fn run() {
         .expect("failed to run Google Chat desktop app");
 }
 
-/// Creates a small always-on-top "peek" window positioned at the bottom-right
-/// of the main window. The peek window has an injected toolbar with "Pop Out"
-/// (expand to full window) and "Close" buttons.
-fn create_peek_window(app: &tauri::AppHandle, url: tauri::Url) {
-    let (peek_x, peek_y) = peek_position(app);
-    let label = child_window_label(&url);
-    let label_for_nav = label.clone();
-    let app_for_nav = app.clone();
-    let app_for_newwin = app.clone();
-    let label_for_newwin = label.clone();
-
-    let result = WebviewWindowBuilder::new(
-        app,
-        &label,
-        WebviewUrl::External(url.clone()),
-    )
-    .title(title_for_url(&url))
-    .inner_size(PEEK_WIDTH, PEEK_HEIGHT)
-    .position(peek_x, peek_y)
-    .min_inner_size(320.0, 240.0)
-    .resizable(true)
-    .always_on_top(true)
-    .user_agent(SAFARI_USER_AGENT)
-    .on_navigation(move |nav_url| {
-        if nav_url.host_str() == Some("peek-action.tauri.internal") {
-            match nav_url.path() {
-                "/expand" => expand_peek_window(&app_for_nav, &label_for_nav),
-                "/close" => {
-                    if let Some(w) = app_for_nav.get_webview_window(&label_for_nav) {
-                        let _ = w.close();
-                    }
-                }
-                _ => {}
-            }
-            return false;
-        }
-        true
-    })
-    .on_page_load(move |webview, payload| {
-        if matches!(payload.event(), PageLoadEvent::Finished) {
-            let _ = webview.eval(PEEK_TOOLBAR_JS);
-        }
-    })
-    .on_new_window(move |url, _| {
-        // Links clicked inside the peek window navigate within it
-        if let Some(peek_win) = app_for_newwin.get_webview_window(&label_for_newwin) {
-            let _ = peek_win.navigate(url);
-        }
-        NewWindowResponse::Deny
-    })
-    .build();
-
-    if let Ok(ref win) = result {
-        // Inject toolbar immediately for fast-loading pages
-        let _ = win.eval(PEEK_TOOLBAR_JS);
+/// Creates a child webview overlay inside the main window, positioned at
+/// bottom-right. This is a true in-window PiP — no separate OS window.
+fn create_peek_overlay(app: &tauri::AppHandle, url: tauri::Url) {
+    // Close any existing peek overlay first
+    if let Some(existing) = app.get_webview("peek") {
+        let _ = existing.close();
     }
 
-    if let Err(e) = result {
-        eprintln!("failed to create peek window: {e}");
+    let Some(main_window) = app.get_window("main") else {
+        return;
+    };
+    let (x, y) = peek_position_logical(app);
+
+    let app_for_nav = app.clone();
+
+    let builder = WebviewBuilder::new("peek", WebviewUrl::External(url))
+        .user_agent(SAFARI_USER_AGENT)
+        .on_navigation(move |nav_url| {
+            if nav_url.host_str() == Some("peek-action.tauri.internal") {
+                match nav_url.path() {
+                    "/expand" => expand_peek(&app_for_nav),
+                    "/close" => close_peek(&app_for_nav),
+                    _ => {}
+                }
+                return false;
+            }
+            true
+        })
+        .on_page_load(|webview, payload| {
+            if matches!(payload.event(), PageLoadEvent::Finished) {
+                let _ = webview.eval(PEEK_TOOLBAR_JS);
+            }
+        });
+
+    let result = main_window.add_child(
+        builder,
+        LogicalPosition::new(x, y),
+        LogicalSize::new(PEEK_WIDTH, PEEK_HEIGHT),
+    );
+
+    match result {
+        Ok(ref peek) => {
+            let _ = peek.eval(PEEK_TOOLBAR_JS);
+        }
+        Err(e) => eprintln!("failed to create peek overlay: {e}"),
     }
 }
 
-/// Takes a peek window label, removes always_on_top, and resizes it to
-/// a full-size workspace window.
-fn expand_peek_window(app: &tauri::AppHandle, label: &str) {
-    let Some(window) = app.get_webview_window(label) else {
+/// Pops the peek webview out into a full-size standalone window,
+/// then closes the in-window peek overlay.
+fn expand_peek(app: &tauri::AppHandle) {
+    let Some(peek) = app.get_webview("peek") else {
         return;
     };
 
-    let _ = window.set_always_on_top(false);
-    let _ = window.set_size(tauri::LogicalSize::new(1180.0, 820.0));
-    let _ = window.center();
+    let url = match peek.url() {
+        Ok(u) => u,
+        Err(_) => return,
+    };
 
-    // Remove the peek toolbar from the expanded window
-    let _ = window.eval(
-        r#"(function(){
-            var tb = document.getElementById('_peek_toolbar');
-            if (tb) tb.remove();
-            document.body.style.paddingBottom = '';
-        })();"#,
-    );
+    let _ = peek.close();
+
+    let label = child_window_label(&url);
+    let app_clone = app.clone();
+    let label_clone = label.clone();
+
+    let _ = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url.clone()))
+        .title(title_for_url(&url))
+        .inner_size(1180.0, 820.0)
+        .min_inner_size(820.0, 560.0)
+        .resizable(true)
+        .user_agent(SAFARI_USER_AGENT)
+        .on_new_window(move |url, _| {
+            if let Some(win) = app_clone.get_webview_window(&label_clone) {
+                let _ = win.navigate(url);
+            }
+            NewWindowResponse::Deny
+        })
+        .build();
 }
 
-/// Calculates the position for a peek window at the bottom-right of the main window.
-fn peek_position(app: &tauri::AppHandle) -> (f64, f64) {
-    if let Some(main_win) = app.get_webview_window("main") {
-        if let (Ok(pos), Ok(size)) = (main_win.outer_position(), main_win.outer_size()) {
-            return (
-                pos.x as f64 + size.width as f64 - PEEK_WIDTH - PEEK_MARGIN,
-                pos.y as f64 + size.height as f64 - PEEK_HEIGHT - PEEK_MARGIN,
-            );
-        }
+/// Closes the peek overlay webview.
+fn close_peek(app: &tauri::AppHandle) {
+    if let Some(peek) = app.get_webview("peek") {
+        let _ = peek.close();
     }
-    (200.0, 200.0)
 }
 
-fn get_active_window(app: &tauri::AppHandle) -> tauri::WebviewWindow {
-    app.webview_windows()
-        .into_values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .unwrap_or_else(|| app.get_webview_window("main").expect("main window exists"))
+/// Repositions the peek overlay to stay anchored at bottom-right after resize.
+fn reposition_peek(app: &tauri::AppHandle) {
+    let Some(peek) = app.get_webview("peek") else {
+        return;
+    };
+    let (x, y) = peek_position_logical(app);
+    let _ = peek.set_position(LogicalPosition::new(x, y));
+}
+
+/// Calculates the logical (x, y) for the peek overlay at bottom-right of the main window.
+fn peek_position_logical(app: &tauri::AppHandle) -> (f64, f64) {
+    let Some(main_window) = app.get_window("main") else {
+        return (200.0, 200.0);
+    };
+    let Ok(phys_size) = main_window.inner_size() else {
+        return (200.0, 200.0);
+    };
+    let scale = main_window.scale_factor().unwrap_or(1.0);
+    let logical_w = phys_size.width as f64 / scale;
+    let logical_h = phys_size.height as f64 / scale;
+
+    let x = (logical_w - PEEK_WIDTH - PEEK_MARGIN).max(0.0);
+    let y = (logical_h - PEEK_HEIGHT - PEEK_MARGIN).max(0.0);
+    (x, y)
 }
 
 fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-
     if let Ok(icon) = Image::from_bytes(icon_bytes) {
         let _ = window.set_icon(icon);
     }
@@ -275,17 +295,10 @@ fn child_window_label(url: &tauri::Url) -> String {
     let sanitized: String = url
         .as_str()
         .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() {
-                character
-            } else {
-                '-'
-            }
-        })
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
         .take(80)
         .collect();
-
-    format!("peek-{id}-{sanitized}")
+    format!("expanded-{id}-{sanitized}")
 }
 
 fn title_for_url(url: &tauri::Url) -> &'static str {

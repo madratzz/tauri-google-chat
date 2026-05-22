@@ -4,6 +4,22 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 15:45
+
+Replaced the separate OS peek window approach with a true **in-window PiP overlay** using Tauri v2's multi-webview functionality (`Window::add_child`). Clicking a link now displays the webview overlay inside the main Google Chat window bounds at the bottom-right, without spawning a new OS-level window in the Dock.
+
+Files touched:
+- `src-tauri/Cargo.toml`
+- `src-tauri/src/lib.rs`
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Key additions:
+- Enabled the `unstable` feature flag for Tauri in `Cargo.toml` to access `add_child`.
+- Replaced the helper `create_peek_window` with `create_peek_overlay` using `main_window.add_child`.
+- Listened to `WindowEvent::Resized` on the main window to update the overlay panel's position dynamically.
+- Cleanly closing the child webview when closed, or closing and spawning a full `WebviewWindow` when expanded (popped out).
+
 ### 2026-05-22 15:25
 
 Replaced same-window link routing with a peek/picture-in-picture approach. Clicking any link in Google Chat now opens a small floating window positioned at the bottom-right of the main window. The main Google Chat view stays intact. The peek window has an injected floating toolbar with "Pop Out" (expands to full window) and "Close" buttons.
