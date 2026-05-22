@@ -9,6 +9,8 @@ Last updated: 2026-05-22
 - Tauri `on_new_window` can create app-managed child windows for Workspace links.
 - Tauri child windows on macOS should use `.window_features(features)` to share the opener webview configuration where possible.
 - `on_navigation` callbacks must capture a cloneable `AppHandle`, not a borrowed `App`, because the callback must be `Send + 'static`.
+- Avoid using broad `on_navigation` interception for Google Workspace hosts in Google Chat; Chat uses embedded side panels/frames for Tasks, Contacts, Drive, and similar services, and intercepting those navigations can spawn blank windows or break the embedded panel.
+- For Tauri `on_new_window`, prefer creating the child webview with `about:blank` and returning `NewWindowResponse::Create`; the runtime attaches the requested popup URL to that webview.
 - Tauri runtime icon switching requires the `image-png` feature and `Image::from_bytes`.
 - DMG packaging uses macOS tools such as `hdiutil` and AppleScript; sandboxed execution can fail without showing the inner error.
 
@@ -21,6 +23,7 @@ Last updated: 2026-05-22
 ## Mistakes to Avoid
 
 - Do not rely on `tauri.conf.json` window declarations when custom window event hooks are required.
+- Do not treat all `docs.google.com`, `drive.google.com`, `tasks.google.com`, or similar navigations as user-clicked external links; some are internal Google Chat sidebar/plugin frames.
 - Do not remove the Safari-like user agent without retesting Google sign-in and Google Chat support.
 - Do not treat DMG failure as an app compile failure; check whether macOS packaging permissions are involved.
 - Do not store sensitive account or auth material in agent logs.

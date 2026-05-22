@@ -4,6 +4,32 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 14:34
+
+Fixed Google Chat opening Google Tasks, Drive, Contacts, and similar side-panel services in separate blank windows on its own.
+
+Files touched:
+
+- `src-tauri/src/lib.rs`
+- `.agents/context.md`
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Decisions made:
+
+- Removed broad `on_navigation` interception for Workspace hosts.
+- Kept internal app windows only for explicit `window.open` popup requests.
+- Changed popup child windows to use `about:blank` with `NewWindowResponse::Create`, matching Tauri's recommended new-window flow.
+
+Issues found:
+
+- Google Chat embeds side-panel/plugin services such as Tasks through navigations that are not user-requested external link opens.
+- Intercepting those navigations caused unwanted app windows and could leave embedded panels stuck loading.
+
+Next steps:
+
+- Manually verify clicking real Docs/Sheets/Gmail links opens an in-app child window, while side-panel Tasks/Contacts/Drive remain embedded.
+
 ### 2026-05-22 14:25
 
 Set up the agent context system requested by the user.

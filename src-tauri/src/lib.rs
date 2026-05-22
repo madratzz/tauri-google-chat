@@ -16,7 +16,6 @@ pub fn run() {
         .setup(|app| {
             let app_handle = app.handle().clone();
             let nested_app_handle = app.handle().clone();
-            let navigation_app_handle = app.handle().clone();
 
             WebviewWindowBuilder::new(
                 app,
@@ -33,7 +32,7 @@ pub fn run() {
                 let window = WebviewWindowBuilder::new(
                     &app_handle,
                     child_window_label(&url),
-                    WebviewUrl::External(url.clone()),
+                    WebviewUrl::External("about:blank".parse().expect("valid blank URL")),
                 )
                 .title(title)
                 .inner_size(1180.0, 820.0)
@@ -48,7 +47,7 @@ pub fn run() {
                         let window = WebviewWindowBuilder::new(
                             &nested_app_handle,
                             child_window_label(&url),
-                            WebviewUrl::External(url.clone()),
+                            WebviewUrl::External("about:blank".parse().expect("valid blank URL")),
                         )
                         .title(title)
                         .inner_size(1180.0, 820.0)
@@ -66,14 +65,6 @@ pub fn run() {
                 .expect("failed to open webview window");
 
                 NewWindowResponse::Create { window }
-            })
-            .on_navigation(move |url| {
-                if should_open_in_child_window(url) {
-                    open_internal_window(&navigation_app_handle, url.clone());
-                    false
-                } else {
-                    true
-                }
             })
             .build()?;
 
@@ -167,58 +158,6 @@ fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
     if let Ok(icon) = Image::from_bytes(icon_bytes) {
         let _ = window.set_icon(icon);
     }
-}
-
-fn should_open_in_child_window(url: &tauri::Url) -> bool {
-    matches!(
-        url.host_str(),
-        Some(
-            "docs.google.com"
-                | "drive.google.com"
-                | "mail.google.com"
-                | "gmail.com"
-                | "calendar.google.com"
-                | "meet.google.com"
-                | "contacts.google.com"
-                | "keep.google.com"
-                | "tasks.google.com"
-                | "jamboard.google.com"
-        )
-    )
-}
-
-fn open_internal_window(app: &tauri::AppHandle, url: tauri::Url) {
-    let app_handle = app.clone();
-
-    let _ = WebviewWindowBuilder::new(
-        app,
-        child_window_label(&url),
-        WebviewUrl::External(url.clone()),
-    )
-    .title(title_for_url(&url))
-    .inner_size(1180.0, 820.0)
-    .min_inner_size(820.0, 560.0)
-    .resizable(true)
-    .user_agent(SAFARI_USER_AGENT)
-    .on_new_window(move |url, features| {
-        let title = title_for_url(&url);
-        let window = WebviewWindowBuilder::new(
-            &app_handle,
-            child_window_label(&url),
-            WebviewUrl::External(url.clone()),
-        )
-        .title(title)
-        .inner_size(1180.0, 820.0)
-        .min_inner_size(820.0, 560.0)
-        .resizable(true)
-        .user_agent(SAFARI_USER_AGENT)
-        .window_features(features)
-        .build()
-        .expect("failed to open child webview window");
-
-        NewWindowResponse::Create { window }
-    })
-    .build();
 }
 
 fn child_window_label(url: &tauri::Url) -> String {
