@@ -4,6 +4,25 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 16:15
+
+Fixed dynamic icon switching and default launcher icons on macOS. Standard Tauri `window.set_icon` does not affect the Dock (taskbar) or App Launcher icon on macOS. Integrated direct AppKit/Cocoa calls via `objc` and `cocoa` crates.
+
+Files touched:
+- `src-tauri/Cargo.toml`
+- `src-tauri/src/lib.rs`
+- `src-tauri/icons/*` (regenerated app launcher icons)
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Key additions:
+- Added macOS-specific dependencies `objc` and `cocoa` to `Cargo.toml`.
+- Implemented `set_macos_dock_icon` in `lib.rs` under `#[cfg(target_os = "macos")]`.
+- Fixed `nil` receiver bug by calling `dataWithBytes:length:` on the `NSData` class object itself, allowing dynamic switching of Dock icon.
+- The helper converts raw PNG bytes into `NSData`, creates an `NSImage` via `initWithData:`, and calls `[NSApp setApplicationIconImage:image]` to update the Dock icon dynamically at runtime.
+- Integrated the helper call inside `set_main_window_icon`.
+- Regenerated all static application icons (`.icns`, `.ico`, and `.png` sizes) using `npm run tauri icon src-tauri/icons/google-chat-color.png` to replace the default blue Tauri logo in macOS Launchpad/App Launcher and Finder.
+
 ### 2026-05-22 15:50
 
 Modified the in-window PiP overlay layout to be centered and occupy exactly 85% of the main window's width and height.

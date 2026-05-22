@@ -290,7 +290,31 @@ fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
     if let Ok(icon) = Image::from_bytes(icon_bytes) {
         let _ = window.set_icon(icon);
     }
+    #[cfg(target_os = "macos")]
+    set_macos_dock_icon(icon_bytes);
 }
+
+#[cfg(target_os = "macos")]
+fn set_macos_dock_icon(icon_bytes: &[u8]) {
+    use cocoa::base::{id, nil};
+    use objc::{msg_send, sel, sel_impl};
+
+    unsafe {
+        let nsdata_class = objc::runtime::Class::get("NSData").unwrap();
+        let data: id = msg_send![nsdata_class, dataWithBytes: icon_bytes.as_ptr() length: icon_bytes.len()];
+
+        let ns_image_class = objc::runtime::Class::get("NSImage").unwrap();
+        let alloc_image: id = msg_send![ns_image_class, alloc];
+        let image: id = msg_send![alloc_image, initWithData: data];
+
+        if image != nil {
+            let ns_app_class = objc::runtime::Class::get("NSApplication").unwrap();
+            let app: id = msg_send![ns_app_class, sharedApplication];
+            let _: () = msg_send![app, setApplicationIconImage: image];
+        }
+    }
+}
+
 
 fn child_window_label(url: &tauri::Url) -> String {
     let id = CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
