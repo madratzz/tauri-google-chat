@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Google Chat Desktop",
+  "version": "0.1.0",
+  "identifier": "com.madratzz.google-chat-desktop",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Google Chat",
+        "url": "https://chat.google.com/",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 960,
+        "minHeight": 640,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15",
+        "resizable": true,
+        "fullscreen": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app"],
+    "category": "Productivity",
+    "shortDescription": "Google Chat desktop app",
+    "longDescription": "A Tauri desktop wrapper for Google Chat."
+  }
+}

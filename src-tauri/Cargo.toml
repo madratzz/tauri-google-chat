@@ -1,0 +1,17 @@
+[package]
+name = "google-chat-desktop"
+version = "0.1.0"
+description = "A Tauri desktop wrapper for Google Chat"
+authors = ["madratzz"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "google_chat_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
