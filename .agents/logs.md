@@ -4,6 +4,25 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 15:25
+
+Replaced same-window link routing with a peek/picture-in-picture approach. Clicking any link in Google Chat now opens a small floating window positioned at the bottom-right of the main window. The main Google Chat view stays intact. The peek window has an injected floating toolbar with "Pop Out" (expands to full window) and "Close" buttons.
+
+Files touched:
+
+- `src-tauri/src/lib.rs`
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Decisions made:
+
+- Replaced `navigate(url)` same-window approach with `create_peek_window()` that spawns a small `always_on_top` child window.
+- Injected a dark-themed floating toolbar at the bottom of peek windows via `eval()`.
+- Toolbar buttons use sentinel URL navigation (`peek-action.tauri.internal/expand` and `/close`) intercepted by `on_navigation` to trigger Rust-side actions.
+- `on_page_load` with `PageLoadEvent::Finished` re-injects toolbar after internal navigations.
+- "Pop Out" removes always-on-top, resizes to full, centers window, and strips toolbar.
+- Removed the menu-level `Cmd+E` expand shortcut (replaced by visible toolbar buttons).
+
 ### 2026-05-22 15:10
 
 Added same-window link routing, the "Expand to New Window" (Cmd+E) feature, and updated build target to generate DMG installer packages automatically.

@@ -14,9 +14,12 @@ Last updated: 2026-05-22
 - Tauri window labels must be unique. URL-derived labels can collide when Google Marketplace/OAuth/install flows open the same popup more than once, causing `.build().expect(...)` crashes.
 - Tauri runtime icon switching requires the `image-png` feature and `Image::from_bytes`.
 - DMG packaging uses macOS tools such as `hdiutil` and AppleScript; sandboxed execution can fail without showing the inner error.
-- The user does not want to use the system browser at all; all links must navigate inside the application webview.
-- To open links in the same window when they request a new window (e.g. `target="_blank"`), call `.navigate(url)` on the active window inside `on_new_window` and return `NewWindowResponse::Deny`.
-- Provide an expand/pop-out feature (e.g., `Cmd+E`) so the user can pop the current page out into a separate Tauri child window and return the original window to its base state.
+- The user does not want to use the system browser at all; all links must stay inside the application.
+- The user prefers a "peek" picture-in-picture approach: clicking a link should open a small floating window over the main chat, not navigate the main webview away from Google Chat.
+- In peek mode, use `on_new_window` to create a small `always_on_top` Tauri window positioned at the bottom-right of the main window. The main window stays on Google Chat.
+- Inject a floating toolbar into peek windows via `window.eval()` after page load. Toolbar buttons navigate to sentinel URLs (e.g., `https://peek-action.tauri.internal/expand`) that `on_navigation` intercepts and cancels, triggering Rust-side actions instead.
+- `on_page_load` with `PageLoadEvent::Finished` is the right hook to re-inject the toolbar after each navigation inside a peek window.
+- To "Pop Out" a peek window, remove `always_on_top`, resize it to full, center it, and remove the injected toolbar via eval.
 
 ## Patterns
 
