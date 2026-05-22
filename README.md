@@ -41,3 +41,7 @@ The bundled app will be created under `src-tauri/target/release/bundle`.
 ## Notes
 
 Google Chat authentication happens inside the Tauri webview. If Google blocks sign-in because it does not trust the embedded browser on your platform, use Google Chat in your system browser instead.
+
+## Icon Attribution
+
+Google Chat icon from [selfh.st/icons](https://github.com/selfhst/icons), surfaced by [Dashboard Icons](https://dashboardicons.com/icons/external/google-chat), licensed under CC BY 4.0.
