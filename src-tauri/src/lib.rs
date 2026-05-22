@@ -14,9 +14,6 @@ const DARK_ICON: &[u8] = include_bytes!("../icons/google-chat-dark.png");
 const WHITE_ICON: &[u8] = include_bytes!("../icons/google-chat-white.png");
 static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
 
-const PEEK_WIDTH: f64 = 520.0;
-const PEEK_HEIGHT: f64 = 420.0;
-const PEEK_MARGIN: f64 = 16.0;
 
 /// JavaScript injected into peek webviews to render a floating toolbar with
 /// "Pop Out" and "Close" buttons. Buttons navigate to sentinel URLs that
@@ -178,7 +175,7 @@ fn create_peek_overlay(app: &tauri::AppHandle, url: tauri::Url) {
     let Some(main_window) = app.get_window("main") else {
         return;
     };
-    let (x, y) = peek_position_logical(app);
+    let (size, pos) = peek_size_and_position_logical(app);
 
     let app_for_nav = app.clone();
 
@@ -203,8 +200,8 @@ fn create_peek_overlay(app: &tauri::AppHandle, url: tauri::Url) {
 
     let result = main_window.add_child(
         builder,
-        LogicalPosition::new(x, y),
-        LogicalSize::new(PEEK_WIDTH, PEEK_HEIGHT),
+        pos,
+        size,
     );
 
     match result {
@@ -255,30 +252,35 @@ fn close_peek(app: &tauri::AppHandle) {
     }
 }
 
-/// Repositions the peek overlay to stay anchored at bottom-right after resize.
+/// Repositions the peek overlay to stay centered after resize.
 fn reposition_peek(app: &tauri::AppHandle) {
     let Some(peek) = app.get_webview("peek") else {
         return;
     };
-    let (x, y) = peek_position_logical(app);
-    let _ = peek.set_position(LogicalPosition::new(x, y));
+    let (size, pos) = peek_size_and_position_logical(app);
+    let _ = peek.set_size(size);
+    let _ = peek.set_position(pos);
 }
 
-/// Calculates the logical (x, y) for the peek overlay at bottom-right of the main window.
-fn peek_position_logical(app: &tauri::AppHandle) -> (f64, f64) {
+/// Calculates the logical size and logical position for the peek overlay at 85% centered.
+fn peek_size_and_position_logical(app: &tauri::AppHandle) -> (LogicalSize<f64>, LogicalPosition<f64>) {
     let Some(main_window) = app.get_window("main") else {
-        return (200.0, 200.0);
+        return (LogicalSize::new(800.0, 600.0), LogicalPosition::new(100.0, 100.0));
     };
     let Ok(phys_size) = main_window.inner_size() else {
-        return (200.0, 200.0);
+        return (LogicalSize::new(800.0, 600.0), LogicalPosition::new(100.0, 100.0));
     };
     let scale = main_window.scale_factor().unwrap_or(1.0);
     let logical_w = phys_size.width as f64 / scale;
     let logical_h = phys_size.height as f64 / scale;
 
-    let x = (logical_w - PEEK_WIDTH - PEEK_MARGIN).max(0.0);
-    let y = (logical_h - PEEK_HEIGHT - PEEK_MARGIN).max(0.0);
-    (x, y)
+    let w = logical_w * 0.85;
+    let h = logical_h * 0.85;
+
+    let x = (logical_w - w) / 2.0;
+    let y = (logical_h - h) / 2.0;
+
+    (LogicalSize::new(w, h), LogicalPosition::new(x, y))
 }
 
 fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {

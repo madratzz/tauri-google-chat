@@ -4,6 +4,20 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 15:50
+
+Modified the in-window PiP overlay layout to be centered and occupy exactly 85% of the main window's width and height.
+
+Files touched:
+- `src-tauri/src/lib.rs`
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Key additions:
+- Updated the positioning calculations in `peek_size_and_position_logical` to scale the width/height to 85% of the main window's logical dimensions, and center the overlay within the main window using `(parent_dimension - child_dimension) / 2.0`.
+- Updated `reposition_peek` to dynamically resize (`peek.set_size(size)`) and move (`peek.set_position(pos)`) the webview on window resize events, ensuring the 85% ratio and centering are kept responsive.
+- Removed unused PEEK constants.
+
 ### 2026-05-22 15:45
 
 Replaced the separate OS peek window approach with a true **in-window PiP overlay** using Tauri v2's multi-webview functionality (`Window::add_child`). Clicking a link now displays the webview overlay inside the main Google Chat window bounds at the bottom-right, without spawning a new OS-level window in the Dock.

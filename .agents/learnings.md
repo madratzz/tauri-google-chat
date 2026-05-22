@@ -15,14 +15,14 @@ Last updated: 2026-05-22
 - Tauri runtime icon switching requires the `image-png` feature and `Image::from_bytes`.
 - DMG packaging uses macOS tools such as `hdiutil` and AppleScript; sandboxed execution can fail without showing the inner error.
 - The user does not want to use the system browser at all; all links must stay inside the application.
-- The user prefers a "peek" picture-in-picture approach: clicking a link should open a small overlay panel over the main chat, not navigate the main webview or open a separate OS window.
+- The user prefers a "peek" picture-in-picture approach: clicking a link should open an overlay panel centered over the main chat, occupying 85% of its width/height, not navigate the main webview or open a separate OS window.
 - Creating a separate `WebviewWindow` (even with `always_on_top`) still appears as a distinct OS window with its own Dock entry and title bar. The user rejected this.
 - For true in-window PiP, use Tauri v2's multi-webview support: `Window::add_child(WebviewBuilder, position, size)` to create a child webview overlay inside the main window. Requires the `unstable` feature flag in `Cargo.toml`.
 - Inject a floating toolbar into the peek webview via `eval()` after `on_page_load`. Toolbar buttons navigate to sentinel URLs (e.g., `https://peek-action.tauri.internal/expand`) intercepted by `on_navigation`.
 - `on_page_load` with `PageLoadEvent::Finished` re-injects the toolbar after each in-peek navigation.
 - To "Pop Out" a peek: get the URL, close the child webview, then create a full `WebviewWindow`.
-- Listen for `WindowEvent::Resized` on the main window and call `webview.set_position()` to keep the peek anchored at bottom-right.
-- `inner_size()` returns `PhysicalSize`; convert to logical using `scale_factor()` for positioning.
+- Listen for `WindowEvent::Resized` on the main window and call `webview.set_size()` and `webview.set_position()` to keep the peek overlay sized to 85% and perfectly centered.
+- `inner_size()` returns `PhysicalSize`; convert to logical using `scale_factor()` for layout and size positioning.
 
 ## Patterns
 
