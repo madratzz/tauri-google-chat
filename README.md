@@ -4,6 +4,8 @@ A small Rust/Tauri desktop wrapper for Google Chat.
 
 The app opens `https://chat.google.com/` in a native desktop webview and adds a simple native menu with reload, back, forward, and quit actions.
 
+The Icon menu can switch the active window icon between the color, dark, and white Google Chat variants.
+
 ## Requirements
 
 - Node.js 18+
