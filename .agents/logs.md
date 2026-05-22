@@ -4,6 +4,32 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 14:41
+
+Hardened Google Workspace popup handling after the user reported Marketplace app install flows crashing or doing nothing.
+
+Files touched:
+
+- `src-tauri/src/lib.rs`
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Decisions made:
+
+- Added a global atomic counter to make child popup window labels unique.
+- Replaced popup window `.expect(...)` panics with graceful `NewWindowResponse::Deny` on build failure.
+- Kept popup windows inside the app through Tauri-managed child windows.
+
+Issues found:
+
+- URL-derived child window labels could collide for repeated Marketplace/OAuth/install popups.
+- A label collision or build failure inside `.expect(...)` could crash the app.
+
+Next steps:
+
+- Manually retest Google Workspace Marketplace `Install` and `Add to Space` flows.
+- Consider a full in-app overlay browser shell with toolbar controls if the user wants links shown inside the main window instead of child windows.
+
 ### 2026-05-22 14:34
 
 Fixed Google Chat opening Google Tasks, Drive, Contacts, and similar side-panel services in separate blank windows on its own.

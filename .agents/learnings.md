@@ -11,6 +11,7 @@ Last updated: 2026-05-22
 - `on_navigation` callbacks must capture a cloneable `AppHandle`, not a borrowed `App`, because the callback must be `Send + 'static`.
 - Avoid using broad `on_navigation` interception for Google Workspace hosts in Google Chat; Chat uses embedded side panels/frames for Tasks, Contacts, Drive, and similar services, and intercepting those navigations can spawn blank windows or break the embedded panel.
 - For Tauri `on_new_window`, prefer creating the child webview with `about:blank` and returning `NewWindowResponse::Create`; the runtime attaches the requested popup URL to that webview.
+- Tauri window labels must be unique. URL-derived labels can collide when Google Marketplace/OAuth/install flows open the same popup more than once, causing `.build().expect(...)` crashes.
 - Tauri runtime icon switching requires the `image-png` feature and `Image::from_bytes`.
 - DMG packaging uses macOS tools such as `hdiutil` and AppleScript; sandboxed execution can fail without showing the inner error.
 
@@ -24,6 +25,7 @@ Last updated: 2026-05-22
 
 - Do not rely on `tauri.conf.json` window declarations when custom window event hooks are required.
 - Do not treat all `docs.google.com`, `drive.google.com`, `tasks.google.com`, or similar navigations as user-clicked external links; some are internal Google Chat sidebar/plugin frames.
+- Do not `expect` child popup window creation in new-window handlers; return `NewWindowResponse::Deny` on build failure so popup problems do not crash the whole app.
 - Do not remove the Safari-like user agent without retesting Google sign-in and Google Chat support.
 - Do not treat DMG failure as an app compile failure; check whether macOS packaging permissions are involved.
 - Do not store sensitive account or auth material in agent logs.

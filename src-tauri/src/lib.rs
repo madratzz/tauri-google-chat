@@ -1,7 +1,9 @@
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    webview::NewWindowResponse,
+    webview::{NewWindowFeatures, NewWindowResponse},
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
@@ -10,12 +12,12 @@ const SAFARI_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
 const COLOR_ICON: &[u8] = include_bytes!("../icons/google-chat-color.png");
 const DARK_ICON: &[u8] = include_bytes!("../icons/google-chat-dark.png");
 const WHITE_ICON: &[u8] = include_bytes!("../icons/google-chat-white.png");
+static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let app_handle = app.handle().clone();
-            let nested_app_handle = app.handle().clone();
 
             WebviewWindowBuilder::new(
                 app,
@@ -28,43 +30,7 @@ pub fn run() {
             .resizable(true)
             .user_agent(SAFARI_USER_AGENT)
             .on_new_window(move |url, features| {
-                let title = title_for_url(&url);
-                let window = WebviewWindowBuilder::new(
-                    &app_handle,
-                    child_window_label(&url),
-                    WebviewUrl::External("about:blank".parse().expect("valid blank URL")),
-                )
-                .title(title)
-                .inner_size(1180.0, 820.0)
-                .min_inner_size(820.0, 560.0)
-                .resizable(true)
-                .user_agent(SAFARI_USER_AGENT)
-                .window_features(features)
-                .on_new_window({
-                    let nested_app_handle = nested_app_handle.clone();
-                    move |url, features| {
-                        let title = title_for_url(&url);
-                        let window = WebviewWindowBuilder::new(
-                            &nested_app_handle,
-                            child_window_label(&url),
-                            WebviewUrl::External("about:blank".parse().expect("valid blank URL")),
-                        )
-                        .title(title)
-                        .inner_size(1180.0, 820.0)
-                        .min_inner_size(820.0, 560.0)
-                        .resizable(true)
-                        .user_agent(SAFARI_USER_AGENT)
-                        .window_features(features)
-                        .build()
-                        .expect("failed to open child webview window");
-
-                        NewWindowResponse::Create { window }
-                    }
-                })
-                .build()
-                .expect("failed to open webview window");
-
-                NewWindowResponse::Create { window }
+                create_workspace_window(app_handle.clone(), url, features)
             })
             .build()?;
 
@@ -160,7 +126,41 @@ fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
     }
 }
 
+fn create_workspace_window(
+    app: tauri::AppHandle,
+    url: tauri::Url,
+    features: NewWindowFeatures,
+) -> NewWindowResponse<tauri::Wry> {
+    let child_app = app.clone();
+    let window = WebviewWindowBuilder::new(
+        &app,
+        child_window_label(&url),
+        WebviewUrl::External(blank_url()),
+    )
+    .title(title_for_url(&url))
+    .inner_size(1180.0, 820.0)
+    .min_inner_size(820.0, 560.0)
+    .resizable(true)
+    .user_agent(SAFARI_USER_AGENT)
+    .window_features(features)
+    .on_new_window(move |url, features| create_workspace_window(child_app.clone(), url, features))
+    .build();
+
+    match window {
+        Ok(window) => NewWindowResponse::Create { window },
+        Err(error) => {
+            eprintln!("failed to open workspace window: {error}");
+            NewWindowResponse::Deny
+        }
+    }
+}
+
+fn blank_url() -> tauri::Url {
+    "about:blank".parse().expect("valid blank URL")
+}
+
 fn child_window_label(url: &tauri::Url) -> String {
+    let id = CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
     let sanitized: String = url
         .as_str()
         .chars()
@@ -174,7 +174,7 @@ fn child_window_label(url: &tauri::Url) -> String {
         .take(80)
         .collect();
 
-    format!("workspace-{sanitized}")
+    format!("workspace-{id}-{sanitized}")
 }
 
 fn title_for_url(url: &tauri::Url) -> &'static str {
