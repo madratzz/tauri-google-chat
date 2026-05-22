@@ -1,11 +1,40 @@
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    webview::NewWindowResponse,
+    WebviewUrl, WebviewWindowBuilder,
     Manager,
 };
+
+const CHAT_URL: &str = "https://chat.google.com/";
+const SAFARI_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15";
 
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
+            WebviewWindowBuilder::new(
+                app,
+                "main",
+                WebviewUrl::External(CHAT_URL.parse().expect("valid Google Chat URL")),
+            )
+            .title("Google Chat")
+            .inner_size(1280.0, 860.0)
+            .min_inner_size(960.0, 640.0)
+            .resizable(true)
+            .user_agent(SAFARI_USER_AGENT)
+            .on_new_window(|url, _features| {
+                open_external_url(url.as_str());
+                NewWindowResponse::Deny
+            })
+            .on_navigation(|url| {
+                if should_open_externally(url) {
+                    open_external_url(url.as_str());
+                    false
+                } else {
+                    true
+                }
+            })
+            .build()?;
+
             let reload = MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?;
             let back = MenuItem::with_id(app, "back", "Back", true, Some("CmdOrCtrl+["))?;
             let forward =
@@ -71,4 +100,37 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("failed to run Google Chat desktop app");
+}
+
+fn should_open_externally(url: &tauri::Url) -> bool {
+    matches!(
+        url.host_str(),
+        Some(
+            "docs.google.com"
+                | "drive.google.com"
+                | "mail.google.com"
+                | "gmail.com"
+                | "calendar.google.com"
+                | "meet.google.com"
+                | "contacts.google.com"
+                | "keep.google.com"
+                | "tasks.google.com"
+                | "jamboard.google.com"
+        )
+    )
+}
+
+fn open_external_url(url: &str) {
+    #[cfg(target_os = "macos")]
+    let command = ("open", vec![url]);
+
+    #[cfg(target_os = "windows")]
+    let command = ("cmd", vec!["/C", "start", "", url]);
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let command = ("xdg-open", vec![url]);
+
+    let _ = std::process::Command::new(command.0)
+        .args(command.1)
+        .spawn();
 }
