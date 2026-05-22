@@ -14,6 +14,9 @@ Last updated: 2026-05-22
 - Tauri window labels must be unique. URL-derived labels can collide when Google Marketplace/OAuth/install flows open the same popup more than once, causing `.build().expect(...)` crashes.
 - Tauri runtime icon switching requires the `image-png` feature and `Image::from_bytes`.
 - DMG packaging uses macOS tools such as `hdiutil` and AppleScript; sandboxed execution can fail without showing the inner error.
+- The user does not want to use the system browser at all; all links must navigate inside the application webview.
+- To open links in the same window when they request a new window (e.g. `target="_blank"`), call `.navigate(url)` on the active window inside `on_new_window` and return `NewWindowResponse::Deny`.
+- Provide an expand/pop-out feature (e.g., `Cmd+E`) so the user can pop the current page out into a separate Tauri child window and return the original window to its base state.
 
 ## Patterns
 
@@ -29,6 +32,7 @@ Last updated: 2026-05-22
 - Do not remove the Safari-like user agent without retesting Google sign-in and Google Chat support.
 - Do not treat DMG failure as an app compile failure; check whether macOS packaging permissions are involved.
 - Do not store sensitive account or auth material in agent logs.
+- Do not route link clicks to the default system browser; keep all navigations within Tauri webviews.
 
 ## Archive Summary
 

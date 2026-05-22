@@ -9,7 +9,7 @@ Last updated: 2026-05-22
 - Main product name: `Google Chat Desktop`.
 - Rust crate name: `google-chat-desktop`.
 - Bundle identifier: `com.madratzz.google-chat-desktop`.
-- The app currently builds a macOS `.app` bundle by default.
+- The app currently builds both a macOS `.app` bundle and a `.dmg` installer automatically.
 - Git is initialized on branch `main`.
 - The repo uses local `.npmrc` with `registry=https://registry.npmjs.org/`.
 - Rust was installed via Homebrew in this environment.
@@ -19,7 +19,7 @@ Last updated: 2026-05-22
 - User wants git initialized and changes committed during development.
 - User prefers the official npm registry for this project.
 - User wanted the Dashboard Icons/selfh.st Google Chat icon.
-- User wanted Google Workspace links to open inside the app.
+- User wanted all links to navigate in-app inside the same window/webview, with an option to expand them to a separate child window (Cmd+E), without ever opening the default system browser.
 - User asked for persistent AI-agent context, logs, memory, learnings, and archives.
 
 ## Naming Conventions
@@ -42,7 +42,7 @@ Last updated: 2026-05-22
 - Do not copy secrets or credentials into `.agents/` or `.archive/`.
 - macOS `.app` icon requires `icon.icns` and `CFBundleIconFile`; PNG alone is not enough.
 - Google Chat rejected the default embedded browser, so the Safari-like user agent is intentional.
-- DMG packaging failed under sandbox but succeeded with elevated macOS permissions.
+- DMG packaging succeeds and is enabled by default in tauri.conf.json.
 - `.gitconfig` global GPG issue was fixed and made read-only earlier; avoid changing global git config unless explicitly requested.
 
 ## Archive Summary

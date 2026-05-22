@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    webview::{NewWindowFeatures, NewWindowResponse},
+    webview::NewWindowResponse,
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
@@ -29,20 +29,25 @@ pub fn run() {
             .min_inner_size(960.0, 640.0)
             .resizable(true)
             .user_agent(SAFARI_USER_AGENT)
-            .on_new_window(move |url, features| {
-                create_workspace_window(app_handle.clone(), url, features)
+            .on_new_window(move |url, _| {
+                if let Some(main_window) = app_handle.get_webview_window("main") {
+                    let _ = main_window.navigate(url);
+                }
+                NewWindowResponse::Deny
             })
             .build()?;
 
             let reload = MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?;
             let back = MenuItem::with_id(app, "back", "Back", true, Some("CmdOrCtrl+["))?;
             let forward = MenuItem::with_id(app, "forward", "Forward", true, Some("CmdOrCtrl+]"))?;
+            let expand = MenuItem::with_id(app, "expand", "Expand to New Window", true, Some("CmdOrCtrl+E"))?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, Some("CmdOrCtrl+Q"))?;
             let icon_color = MenuItem::with_id(app, "icon-color", "Color", true, None::<&str>)?;
             let icon_dark = MenuItem::with_id(app, "icon-dark", "Dark", true, None::<&str>)?;
             let icon_white = MenuItem::with_id(app, "icon-white", "White", true, None::<&str>)?;
             let separator_one = PredefinedMenuItem::separator(app)?;
             let separator_two = PredefinedMenuItem::separator(app)?;
+            let separator_three = PredefinedMenuItem::separator(app)?;
             let edit_undo = PredefinedMenuItem::undo(app, None)?;
             let edit_redo = PredefinedMenuItem::redo(app, None)?;
             let edit_separator_one = PredefinedMenuItem::separator(app)?;
@@ -62,6 +67,8 @@ pub fn run() {
                     &back,
                     &forward,
                     &separator_two,
+                    &expand,
+                    &separator_three,
                     &quit,
                 ],
             )?;
@@ -92,18 +99,55 @@ pub fn run() {
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "reload" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.eval("window.location.reload()");
-                }
+                let window = get_active_window(app);
+                let _ = window.eval("window.location.reload()");
             }
             "back" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.eval("history.back()");
-                }
+                let window = get_active_window(app);
+                let _ = window.eval("history.back()");
             }
             "forward" => {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.eval("history.forward()");
+                let window = get_active_window(app);
+                let _ = window.eval("history.forward()");
+            }
+            "expand" => {
+                let window = get_active_window(app);
+                if let Ok(url) = window.url() {
+                    let url_str = url.as_str();
+                    if url_str != CHAT_URL
+                        && !url_str.starts_with("https://chat.google.com/")
+                        && url_str != "about:blank"
+                        && !url_str.starts_with("about:")
+                    {
+                        let app_handle = app.clone();
+                        let label = child_window_label(&url);
+                        let label_clone = label.clone();
+                        let new_win = WebviewWindowBuilder::new(
+                            app,
+                            label,
+                            WebviewUrl::External(url.clone()),
+                        )
+                        .title(title_for_url(&url))
+                        .inner_size(1180.0, 820.0)
+                        .min_inner_size(820.0, 560.0)
+                        .resizable(true)
+                        .user_agent(SAFARI_USER_AGENT)
+                        .on_new_window(move |url, _| {
+                            if let Some(current_window) = app_handle.get_webview_window(&label_clone) {
+                                let _ = current_window.navigate(url);
+                            }
+                            NewWindowResponse::Deny
+                        })
+                        .build();
+
+                        if new_win.is_ok() {
+                            if window.label() == "main" {
+                                let _ = window.navigate(CHAT_URL.parse().expect("valid URL"));
+                            } else {
+                                let _ = window.close();
+                            }
+                        }
+                    }
                 }
             }
             "icon-color" => set_main_window_icon(app, COLOR_ICON),
@@ -116,6 +160,13 @@ pub fn run() {
         .expect("failed to run Google Chat desktop app");
 }
 
+fn get_active_window(app: &tauri::AppHandle) -> tauri::WebviewWindow {
+    app.webview_windows()
+        .into_values()
+        .find(|w| w.is_focused().unwrap_or(false))
+        .unwrap_or_else(|| app.get_webview_window("main").expect("main window exists"))
+}
+
 fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -126,38 +177,6 @@ fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
     }
 }
 
-fn create_workspace_window(
-    app: tauri::AppHandle,
-    url: tauri::Url,
-    features: NewWindowFeatures,
-) -> NewWindowResponse<tauri::Wry> {
-    let child_app = app.clone();
-    let window = WebviewWindowBuilder::new(
-        &app,
-        child_window_label(&url),
-        WebviewUrl::External(blank_url()),
-    )
-    .title(title_for_url(&url))
-    .inner_size(1180.0, 820.0)
-    .min_inner_size(820.0, 560.0)
-    .resizable(true)
-    .user_agent(SAFARI_USER_AGENT)
-    .window_features(features)
-    .on_new_window(move |url, features| create_workspace_window(child_app.clone(), url, features))
-    .build();
-
-    match window {
-        Ok(window) => NewWindowResponse::Create { window },
-        Err(error) => {
-            eprintln!("failed to open workspace window: {error}");
-            NewWindowResponse::Deny
-        }
-    }
-}
-
-fn blank_url() -> tauri::Url {
-    "about:blank".parse().expect("valid blank URL")
-}
 
 fn child_window_label(url: &tauri::Url) -> String {
     let id = CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);

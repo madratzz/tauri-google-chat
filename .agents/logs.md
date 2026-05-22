@@ -4,6 +4,34 @@ Last updated: 2026-05-22
 
 ## Current Session
 
+### 2026-05-22 15:10
+
+Added same-window link routing, the "Expand to New Window" (Cmd+E) feature, and updated build target to generate DMG installer packages automatically.
+
+Files touched:
+
+- `src-tauri/tauri.conf.json`
+- `src-tauri/src/lib.rs`
+- `.agents/learnings.md`
+- `.agents/logs.md`
+
+Decisions made:
+
+- Enabled `"dmg"` target in `tauri.conf.json`'s bundle targets to compile `.dmg` packages by default.
+- Directed all clicked links (even external ones) to navigate inside the same active webview window.
+- Denied creating new Tauri windows directly on link clicks, completely avoiding the use of the default system browser.
+- Created "Expand to New Window" (`Cmd+E`) command and native menu option, which opens the active window's current navigated URL in a separate child Tauri window, and resets the original webview (navigates main back to Google Chat, or closes child window).
+- Refined back, forward, and reload menu options to dynamically target the currently focused window instead of just the main window.
+
+Issues found:
+
+- Opening external links inside bare Tauri windows leaves the user without navigation controls. Adding same-window navigation combined with `Cmd+E` allows popping out pages when needed.
+- Restricting popups to workspace links interfered with generic links. Applying the same-window navigation to all URLs solved this cleanly.
+
+Next steps:
+
+- Deploy the generated DMG and test the links/expand functionality in action.
+
 ### 2026-05-22 14:41
 
 Hardened Google Workspace popup handling after the user reported Marketplace app install flows crashing or doing nothing.
