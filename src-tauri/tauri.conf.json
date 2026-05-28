@@ -19,6 +19,9 @@
       "icons/icon.ico"
     ],
     "category": "Productivity",
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "shortDescription": "Google Chat desktop app",
     "longDescription": "A Tauri desktop wrapper for Google Chat."
   }
