@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
 
 use tauri::{
     image::Image,
@@ -14,6 +17,11 @@ const DARK_ICON: &[u8] = include_bytes!("../icons/google-chat-dark.png");
 const WHITE_ICON: &[u8] = include_bytes!("../icons/google-chat-white.png");
 static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
 
+// Holds the real URL of the current peek webview.
+// On Windows/WebView2, on_navigation fires on a background thread and
+// the navigation cancel is async — by the time expand_peek runs,
+// peek.url() already returns the sentinel URL, not the real content URL.
+struct PeekUrl(Mutex<Option<tauri::Url>>);
 
 /// JavaScript injected into peek webviews to render a floating toolbar with
 /// "Pop Out" and "Close" buttons. Buttons navigate to sentinel URLs that
@@ -27,14 +35,14 @@ const PEEK_TOOLBAR_JS: &str = r#"
         bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;height:44px;background:rgba(32,33,36,0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;align-items:center;justify-content:flex-end;padding:0 14px;gap:10px;z-index:2147483647;border-top:1px solid rgba(255,255,255,0.08);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-sizing:border-box;';
 
         var expandBtn = document.createElement('button');
-        expandBtn.textContent = '\u2197 Pop Out';
+        expandBtn.textContent = '↗ Pop Out';
         expandBtn.style.cssText = 'background:#8ab4f8;color:#202124;border:none;padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:0.3px;transition:all 0.15s ease;outline:none;';
         expandBtn.onmouseenter = function() { this.style.background='#aecbfa'; this.style.transform='scale(1.04)'; };
         expandBtn.onmouseleave = function() { this.style.background='#8ab4f8'; this.style.transform='scale(1)'; };
         expandBtn.onclick = function(e) { e.preventDefault(); window.location.href='https://peek-action.tauri.internal/expand'; };
 
         var closeBtn = document.createElement('button');
-        closeBtn.textContent = '\u2715 Close';
+        closeBtn.textContent = '✕ Close';
         closeBtn.style.cssText = 'background:rgba(255,255,255,0.08);color:#e8eaed;border:1px solid rgba(255,255,255,0.1);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:500;letter-spacing:0.3px;transition:all 0.15s ease;outline:none;';
         closeBtn.onmouseenter = function() { this.style.background='rgba(234,67,53,0.8)'; this.style.borderColor='rgba(234,67,53,0.6)'; };
         closeBtn.onmouseleave = function() { this.style.background='rgba(255,255,255,0.08)'; this.style.borderColor='rgba(255,255,255,0.1)'; };
@@ -53,6 +61,7 @@ const PEEK_TOOLBAR_JS: &str = r#"
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(PeekUrl(Mutex::new(None)))
         .setup(|app| {
             let app_handle = app.handle().clone();
             let app_resize = app.handle().clone();
@@ -177,15 +186,30 @@ fn create_peek_overlay(app: &tauri::AppHandle, url: tauri::Url) {
     };
     let (size, pos) = peek_size_and_position_logical(app);
 
+    // Bug 1: store the real URL before creating the webview. On Windows/WebView2,
+    // on_navigation cancel is async — peek.url() returns the sentinel by the time
+    // expand_peek runs, so we read from state instead.
+    if let Ok(mut guard) = app.state::<PeekUrl>().0.lock() {
+        *guard = Some(url.clone());
+    }
+
     let app_for_nav = app.clone();
 
     let builder = WebviewBuilder::new("peek", WebviewUrl::External(url))
         .user_agent(SAFARI_USER_AGENT)
         .on_navigation(move |nav_url| {
             if nav_url.host_str() == Some("peek-action.tauri.internal") {
+                // Bug 3: on Windows/WebView2, on_navigation fires on a background thread.
+                // Calling window ops directly deadlocks — wrap everything in spawn so
+                // the callback returns immediately and the task runs on the async runtime.
+                let app = app_for_nav.clone();
                 match nav_url.path() {
-                    "/expand" => expand_peek(&app_for_nav),
-                    "/close" => close_peek(&app_for_nav),
+                    "/expand" => {
+                        tauri::async_runtime::spawn(async move { expand_peek(&app); });
+                    }
+                    "/close" => {
+                        tauri::async_runtime::spawn(async move { close_peek(&app); });
+                    }
                     _ => {}
                 }
                 return false;
@@ -219,30 +243,60 @@ fn expand_peek(app: &tauri::AppHandle) {
         return;
     };
 
-    let url = match peek.url() {
-        Ok(u) => u,
-        Err(_) => return,
+    // Bug 1: read the real URL from app state rather than calling peek.url().
+    // On Windows/WebView2, the navigation cancel is async, so peek.url() returns
+    // the sentinel URL by the time this handler executes.
+    let url = {
+        let state = app.state::<PeekUrl>();
+        let guard = state.0.lock().unwrap();
+        match guard.clone() {
+            Some(u) => u,
+            None => return,
+        }
     };
 
     let _ = peek.close();
 
     let label = child_window_label(&url);
     let app_clone = app.clone();
-    let label_clone = label.clone();
 
-    let _ = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url.clone()))
+    // Bug 2: on_new_window must create a new WebviewWindow rather than calling
+    // win.navigate() — navigate() inside on_new_window corrupts WebView2 internal
+    // state on Windows, leaving the window unresponsive.
+    let result = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url.clone()))
         .title(title_for_url(&url))
         .inner_size(1180.0, 820.0)
         .min_inner_size(820.0, 560.0)
         .resizable(true)
         .user_agent(SAFARI_USER_AGENT)
-        .on_new_window(move |url, _| {
-            if let Some(win) = app_clone.get_webview_window(&label_clone) {
-                let _ = win.navigate(url);
-            }
+        .on_new_window(move |new_url, _| {
+            let app = app_clone.clone();
+            let new_url = new_url.clone();
+            tauri::async_runtime::spawn(async move {
+                let new_label = child_window_label(&new_url);
+                let _ = WebviewWindowBuilder::new(&app, new_label, WebviewUrl::External(new_url.clone()))
+                    .title(title_for_url(&new_url))
+                    .inner_size(1180.0, 820.0)
+                    .min_inner_size(820.0, 560.0)
+                    .resizable(true)
+                    .user_agent(SAFARI_USER_AGENT)
+                    .build();
+            });
             NewWindowResponse::Deny
         })
         .build();
+
+    // Bug 2: win.close() can be silently swallowed by WebView2 on Windows.
+    // Use prevent_close() + destroy() to force-release the WebView2 process.
+    if let Ok(win) = result {
+        let win_clone = win.clone();
+        win.on_window_event(move |event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = win_clone.destroy();
+            }
+        });
+    }
 }
 
 /// Closes the peek overlay webview.
