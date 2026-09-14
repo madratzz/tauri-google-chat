@@ -1,58 +1,49 @@
 # Active Project Context
 
-Last updated: 2026-05-22
+Last updated: 2026-09-14
 
 ## Project Summary
 
-This project is a Rust/Tauri desktop wrapper for Google Chat. It opens `https://chat.google.com/` in a native webview, adds app menus, supports macOS app bundling, includes Google Chat icon assets, and handles Google Workspace links inside app-managed windows.
+Google Chat Desktop is a Rust/Tauri 2 desktop wrapper for `https://chat.google.com/`. It uses a native webview, native menus, Google Chat icon variants, and an in-window peek overlay for new-window content.
 
 ## Current Goals
 
-- Keep the Google Chat desktop wrapper stable and usable on macOS.
-- Preserve cross-platform potential for Windows and Linux with Tauri.
-- Keep app context, memory, logs, and learnings available for future AI agents.
+- Keep the desktop wrapper stable across its supported Tauri platforms.
+- Preserve the in-app navigation and peek-overlay experience.
+- Maintain concise active AI context with immutable dated history.
 
 ## Current Architecture / Structure
 
-- `package.json` defines Tauri CLI scripts: `dev`, `build`, `test`, and `tauri`.
-- `.npmrc` pins this repo to the official npm registry.
-- `src-tauri/Cargo.toml` defines the Rust crate and Tauri dependency.
-- `src-tauri/src/lib.rs` creates the main Google Chat webview, native menus, icon switching, and internal child windows for explicit Workspace popup links.
-- `src-tauri/tauri.conf.json` defines bundle metadata, app category, bundle target, and icon assets.
-- `src-tauri/icons/` contains desktop icon assets plus color, dark, and white Google Chat variants.
-- `.agents/` contains active AI-agent context.
-- `.archive/` contains dated archived AI-agent context indexes and future archive files.
+- `package.json` supplies `dev`, `build`, `test`, and `tauri` commands.
+- `src-tauri/Cargo.toml` defines the Rust crate and its Tauri dependencies.
+- `src-tauri/src/lib.rs` creates the main webview, menus, icon switching, and the in-window peek overlay.
+- `src-tauri/tauri.conf.json` defines bundle metadata, targets, and icon assets.
+- `.agents/` holds concise active context; `.archive/` holds immutable dated snapshots.
 
 ## Important Decisions
 
-- The main Tauri window is created in Rust, not solely from `tauri.conf.json`, so new-window and navigation handlers can be attached.
-- Google Chat uses a Safari-like user agent because Google rejected the default embedded browser after sign-in.
-- Explicit Google Workspace popup links open inside app-managed child webview windows rather than the system browser.
-- The default bundled macOS icon is the color Google Chat icon; runtime menu options can switch active window icon to color, dark, or white.
-- DMG packaging can work, but it requires elevated macOS disk-image/Finder automation permissions in this environment.
-- The default `npm run build` target builds a macOS `.app` bundle.
+- The main window is configured in Rust so it can have custom webview and new-window handlers.
+- The Safari-like user agent is intentional and should be retested before changing it.
+- New-window content remains in Tauri webviews rather than the system browser.
+- Historic context is retained in the dated archives listed below; the active files remain concise.
 
 ## Active Constraints
 
-- Do not store secrets, API keys, tokens, passwords, private keys, or credentials in agent files.
-- Keep generated folders ignored: `node_modules/`, `src-tauri/target/`, `src-tauri/gen/`, mobile icon output folders.
-- Use official npm registry for this project.
-- Prefer source/config changes over generated build output.
-- Preserve useful history in `.archive/` before major context restructures.
-- Maintain reverse chronological logs and archive indexes.
+- Follow root `AGENTS.md`, including the `development` → feature branch → pull-request workflow.
+- Do not store secrets or sensitive personal/internal data in context files.
+- Keep generated folders ignored and prefer source/configuration changes.
+- Maintain active logs and archive indexes in reverse chronological order.
 
 ## Current Open Questions
 
-- Should Windows/Linux platform-specific user agents and bundle targets be added?
-- Should internal child windows get their own navigation menu controls?
-- Should same-tab Workspace navigations be handled differently, or left inside the main webview?
-- Should app icon selection persist between launches?
-- Should the DMG target be re-enabled by default or kept as an explicit elevated build step?
+- Should icon selection persist between launches?
+- Which platform-specific validation should run before the next release?
 
 ## Archive Summary
 
-No archived context files exist yet. Current active files capture the initial project bootstrap and agent-context setup.
+The May 2026 project bootstrap and original active context were archived as a verified dated snapshot during the September 2026 context refresh.
 
 ## Archive Pointers
 
 - [Archived Context Index](../.archive/context/INDEX.md)
+- [2026-05-22 initial project history](../.archive/context/context-2026-05-22-initial-project-history.md)
