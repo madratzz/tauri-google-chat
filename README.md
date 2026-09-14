@@ -92,4 +92,4 @@ Google Chat authentication happens inside the Tauri webview. If Google blocks si
 
 ## Icon Attribution
 
-Google Chat icon from [selfh.st/icons](https://github.com/selfhst/icons), surfaced by [Dashboard Icons](https://dashboardicons.com/icons/external/google-chat), licensed under CC BY 4.0.
+Google Chat icon artwork from [Google's 2026 Chat SVG](https://www.gstatic.com/dynamite/images/product/chat_2026_220dp.svg). The square source used for desktop bundles preserves the supplied artwork's proportions on a transparent canvas.
