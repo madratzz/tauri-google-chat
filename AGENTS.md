@@ -18,7 +18,7 @@ Google Chat Desktop is a Rust/Tauri 2 wrapper for Google Chat. The main implemen
 
 ## Version Naming
 
-Use `X.Y.Z` versions. Increase `X` for intentional breaking releases and `Y` for backward-compatible feature releases. Set `Z` to `floor(unix_timestamp_seconds / 60)` in UTC; never reuse or manually decrease it. Record the full version, UTC assignment time, and major/minor rationale in relevant release notes or version history.
+Use `X.Y.Z` versions. Increase `X` for intentional breaking releases and `Y` for backward-compatible feature releases. Set `Z` to `floor(unix_timestamp_seconds / 60)` in UTC; never reuse or manually decrease it. Record the full version, UTC assignment time, and major/minor rationale in relevant release notes or version history. When a platform installer has stricter numeric limits, keep the app version unchanged and configure a deterministic, valid platform-specific package version; document the mapping alongside the release.
 
 ## Documentation
 

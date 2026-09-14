@@ -4,6 +4,7 @@ Last updated: 2026-09-14
 
 ## Recent Learnings
 
+- WiX limits MSI version fields to 255.255.65535.65535. The UTC-minute app patch number therefore requires `bundle.windows.wix.version`; use `1.1.floor(Z / 65536).(Z % 65536)` for this app's `1.1.Z` releases.
 - Google Chat needs the Safari-like user agent in the embedded webview; retest sign-in before changing it.
 - Do not broadly intercept Workspace-host navigation: Chat's embedded panels can break or spawn blank windows.
 - The true in-window peek UI uses Tauri v2 multi-webview support (`Window::add_child`) and the `unstable` feature.
