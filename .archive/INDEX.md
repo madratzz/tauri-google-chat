@@ -1,6 +1,8 @@
 # Master Archive Index
 
-Last updated: 2026-05-22
+Schema version: 1
+
+Last updated: 2026-09-14
 
 ## Archive Categories
 

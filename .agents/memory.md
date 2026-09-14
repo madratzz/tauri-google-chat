@@ -1,54 +1,49 @@
 # Active Memory
 
-Last updated: 2026-05-22
+Last updated: 2026-09-14
 
 ## Stable Project Facts
 
-- Project root: `/Users/madratzz/Documents/Codex/Tauri-Based-Google-Chat`.
 - The app is a Tauri 2 / Rust desktop wrapper for Google Chat.
 - Main product name: `Google Chat Desktop`.
 - Rust crate name: `google-chat-desktop`.
 - Bundle identifier: `com.madratzz.google-chat-desktop`.
-- The app currently builds both a macOS `.app` bundle and a `.dmg` installer automatically.
-- Git is initialized on branch `main`.
+- The primary implementation is `src-tauri/src/lib.rs`; bundle configuration is `src-tauri/tauri.conf.json`.
+- The repository has `main` and `development`; implementation begins from `development` and uses feature branches under the policy in `AGENTS.md`.
 - The repo uses local `.npmrc` with `registry=https://registry.npmjs.org/`.
-- Rust was installed via Homebrew in this environment.
 
 ## User Preferences
 
-- User wants git initialized and changes committed during development.
 - User prefers the official npm registry for this project.
-- User wanted the Dashboard Icons/selfh.st Google Chat icon.
-- User wanted all links to navigate in-app inside the same window/webview, with an option to expand them to a separate child window (Cmd+E), without ever opening the default system browser.
 - User asked for persistent AI-agent context, logs, memory, learnings, and archives.
+- User authorized creation of `development` and execution of this context-system refresh.
 
 ## Naming Conventions
 
-- Archive filenames use `DD-MM-YY` plus optional lowercase hyphenated slug.
+- Archive filenames use `YYYY-MM-DD` plus an optional lowercase hyphenated slug.
 - Active agent files live under `.agents/`.
 - Older context material lives under `.archive/`.
-- Commit messages so far are concise imperative summaries.
+- Feature branches use `feature/<short-kebab-case-description>`.
 
 ## Important Entities
 
 - Google Chat URL: `https://chat.google.com/`.
-- Workspace link hosts handled in app include Docs, Drive, Gmail, Calendar, Meet, Contacts, Keep, Tasks, and Jamboard.
-- Icon source: Dashboard Icons page backed by `selfh.st/icons`, CC BY 4.0.
-- Main source file: `src-tauri/src/lib.rs`.
-- Bundle config: `src-tauri/tauri.conf.json`.
+- Default agent profile: `.agents/agents/default-agent.md`.
+- Canonical repository instructions: `AGENTS.md`.
 
 ## Do Not Forget
 
 - Do not copy secrets or credentials into `.agents/` or `.archive/`.
 - macOS `.app` icon requires `icon.icns` and `CFBundleIconFile`; PNG alone is not enough.
 - Google Chat rejected the default embedded browser, so the Safari-like user agent is intentional.
-- DMG packaging succeeds and is enabled by default in tauri.conf.json.
-- `.gitconfig` global GPG issue was fixed and made read-only earlier; avoid changing global git config unless explicitly requested.
+- Preserve logical commits and use pull requests; do not force-push, squash merge, or alter Git configuration without explicit user direction.
+- Context archives are immutable once verified.
 
 ## Archive Summary
 
-No archived memory snapshots exist yet.
+The historical May 2026 memory snapshot was archived during the September 2026 refresh. It includes redacted legacy local-path information.
 
 ## Archive Pointers
 
 - [Archived Memory Index](../.archive/memory/INDEX.md)
+- [2026-05-22 initial project history](../.archive/memory/memory-2026-05-22-initial-project-history.md)
