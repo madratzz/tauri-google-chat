@@ -1,6 +1,6 @@
 # Default Agent
 
-Last updated: 2026-05-22
+Last updated: 2026-09-14
 
 ## Agent Role
 
@@ -18,10 +18,12 @@ This agent is responsible for maintaining project context, memory, logs, learnin
 - Keep summaries concise but useful.
 - Use relative links.
 - Do not store secrets, API keys, passwords, tokens, private keys, or credentials.
+- Follow `AGENTS.md` for version-control, branch, pull-request, version-naming, documentation, Unity naming, context, archive, and sensitive-data policies.
+- Re-read shared files immediately before editing and merge safely.
 
 ## Project Context
 
-This project is a Tauri 2 / Rust desktop wrapper for Google Chat. It builds a macOS `.app` by default, uses a Safari-like user agent for Google support, includes Google Chat icon assets, supports active window icon switching, and opens Google Workspace links inside app-managed child windows.
+This is a Tauri 2/Rust Google Chat desktop wrapper. The primary source is `src-tauri/src/lib.rs`; it uses a Safari-like user agent, app-managed webviews, icon variants, and an in-window peek overlay.
 
 ## Responsibilities
 
