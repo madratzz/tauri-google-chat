@@ -1,6 +1,6 @@
 # Maintainer: madratzz
 pkgname=google-chat-desktop
-pkgver=1.1.29823022
+pkgver=1.1.29823045
 pkgrel=1
 pkgdesc='A Tauri desktop wrapper for Google Chat'
 arch=('x86_64')

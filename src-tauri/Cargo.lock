@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "google-chat-desktop"
-version = "1.1.29823022"
+version = "1.1.29823045"
 dependencies = [
  "cocoa",
  "objc",

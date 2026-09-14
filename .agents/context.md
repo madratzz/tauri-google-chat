@@ -25,6 +25,7 @@ Google Chat Desktop is a Rust/Tauri 2 desktop wrapper for `https://chat.google.c
 - The main window is configured in Rust so it can have custom webview and new-window handlers.
 - The Safari-like user agent is intentional and should be retested before changing it.
 - New-window content remains in Tauri webviews rather than the system browser.
+- Windows MSI versions use a deterministic WiX-compatible representation of the app's UTC-minute version when the app patch number exceeds WiX limits.
 - Historic context is retained in the dated archives listed below; the active files remain concise.
 
 ## Active Constraints
