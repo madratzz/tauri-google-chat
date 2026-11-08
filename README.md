@@ -2,9 +2,20 @@
 
 A small Rust/Tauri desktop wrapper for Google Chat.
 
-The app opens `https://chat.google.com/` in a native desktop webview and adds a simple native menu with reload, back, forward, and quit actions.
+The app opens `https://chat.google.com/` in a native desktop webview.
 
-The Icon menu can switch the active window icon between the color, dark, and white Google Chat variants.
+## Features
+
+- **Tray and background mode** — closing the window hides it to the system tray; click the tray icon to toggle it, or use the tray menu to quit. If no tray is available (some Linux desktops), closing quits as before.
+- **Unread badge and notifications** — the unread count from the page title drives the dock/taskbar badge and tray tooltip, and a native notification is shown when it rises while the window is unfocused.
+- **Link handling** — Google hosts (`*.google.com`, `*.googleusercontent.com`, sign-in hosts) stay in the app; new-window Google links open in the in-window peek overlay (Esc closes, *Pop Out* opens a separate window). All other links open in your default browser.
+- **Remembers your window** — size, position, monitor and maximized state are restored on launch. Minimum size is 600×400 so the app works in split-screen and on small laptops.
+- **Zoom** — View → Zoom In / Zoom Out / Actual Size (`Ctrl/Cmd` + `=`, `-`, `0`), persisted between launches.
+- **App icon** — View → App Icon switches between color, dark, and white variants; the choice is persisted.
+- **Offline banner** — shows a Retry banner when the connection drops and reloads automatically when it returns.
+- **Single instance** — launching the app again focuses the existing window.
+
+Preferences are stored in `settings.json` in the platform app-config directory.
 
 ## Installation
 
@@ -78,13 +89,25 @@ npm install
 npm run dev
 ```
 
+## Test
+
+```sh
+npm test
+```
+
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, `clippy -D warnings`, and the unit tests on Linux, macOS and Windows for every pull request.
+
 ## Build
 
 ```sh
 npm run build
 ```
 
-The bundled app will be created under `src-tauri/target/release/bundle`.
+The bundled app will be created under `src-tauri/target/release/bundle`. Release builds use LTO, a single codegen unit, size optimisation and stripped symbols.
+
+## Versioning
+
+Versions are `X.Y.Z` where `Z = floor(unix_seconds / 60)` (UTC minute). Windows MSI cannot hold a patch above 65,535, so the WiX version is `X.Y.floor(Z / 65536).(Z % 65536)` — configured in `src-tauri/tauri.conf.json` → `bundle.windows.wix.version`.
 
 ## Notes
 
