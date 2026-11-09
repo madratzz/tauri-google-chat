@@ -29,7 +29,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          gh release edit "v$VERSION" --target "$(git rev-parse HEAD)" --draft=false --latest
+          if [ "$(gh release view "v$VERSION" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "v$VERSION" --target "$(git rev-parse HEAD)" --draft=false --latest
+          else
+            echo "v$VERSION is already published; skipping."
+          fi
 
   arch:
     needs: publish
