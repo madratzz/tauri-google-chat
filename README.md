@@ -129,6 +129,8 @@ Versions are `X.Y.Z` where `Z = floor(unix_seconds / 60)` (UTC minute). Windows 
 3. builds the Arch `.pkg.tar.zst` and a binary `PKGBUILD` from the Linux `.deb` (`.github/scripts/arch-package.sh`) and uploads them;
 4. publishes the release as latest once every platform succeeded (untick *publish* on a manual run to keep it as a draft).
 
+To publish a draft early (for example while the Linux build is still running), run *Publish draft release* (`publish-draft.yml`) with the version; files uploaded later still land on the published release.
+
 Re-running a failed run is safe: the release is reused and Arch assets are replaced.
 
 The repository `PKGBUILD` builds from source and is for local use; the one attached to each release installs the prebuilt binary.
