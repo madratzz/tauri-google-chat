@@ -20,7 +20,10 @@ use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_window_state::StateFlags;
 
 use settings::{Settings, SettingsState};
-use util::{clamp_zoom, is_in_app_url, is_openable_externally, title_for_url, unread_from_title};
+use util::{
+    clamp_zoom, is_in_app_url, is_openable_externally, is_sign_in_url, title_for_url,
+    unread_from_title,
+};
 
 const CHAT_URL: &str = "https://chat.google.com/";
 // Intentional: Google blocks some embedded-browser user agents. Retest before changing.
@@ -137,12 +140,23 @@ pub fn run() {
             .user_agent(SAFARI_USER_AGENT)
             .initialization_script(OFFLINE_JS)
             .on_new_window(move |url, _| {
-                if is_in_app_url(&url) {
-                    create_peek_overlay(&app_new_window, url);
+                eprintln!("[gcd] new window requested: {url}");
+                let app = app_new_window.clone();
+                if is_sign_in_url(&url) {
+                    // Sign-in must run in the main window, not the peek overlay.
+                    tauri::async_runtime::spawn(async move { navigate_main(&app, url) });
+                } else if is_in_app_url(&url) {
+                    // Defer: creating a webview inside this callback is unsafe on
+                    // macOS and Windows.
+                    tauri::async_runtime::spawn(async move { create_peek_overlay(&app, url) });
                 } else {
-                    open_externally(&app_new_window, &url);
+                    open_externally(&app, &url);
                 }
                 NewWindowResponse::Deny
+            })
+            .on_page_load(|webview, payload| {
+                eprintln!("[gcd] main page {:?}: {}", payload.event(), payload.url());
+                let _ = webview;
             })
             .on_document_title_changed({
                 let app = handle.clone();
@@ -375,10 +389,25 @@ fn toggle_main(app: &AppHandle) {
 // handler also fires for iframes and `javascript:` links, and filtering them
 // breaks Google sign-in.
 
+/// Loads `url` in the main window (used for Google sign-in pages).
+fn navigate_main(app: &AppHandle, url: Url) {
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        close_peek(&app2);
+        if let Some(w) = app2.get_webview_window("main") {
+            if let Err(e) = w.navigate(url) {
+                eprintln!("[gcd] failed to open sign-in page: {e}");
+            }
+        }
+    });
+}
+
 fn open_externally(app: &AppHandle, url: &Url) {
     if !is_openable_externally(url) {
+        eprintln!("[gcd] ignored link with unsupported scheme: {url}");
         return;
     }
+    eprintln!("[gcd] opening in browser: {url}");
     // Navigation callbacks run on a webview thread on Windows; don't block it.
     let app = app.clone();
     let url = url.to_string();

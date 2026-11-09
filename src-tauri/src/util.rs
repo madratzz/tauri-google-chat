@@ -47,6 +47,16 @@ pub fn is_in_app_url(url: &Url) -> bool {
     }
 }
 
+/// Google account sign-in / account-chooser pages, which must load in the main window.
+pub fn is_sign_in_url(url: &Url) -> bool {
+    let host = url.host_str().unwrap_or("").to_ascii_lowercase();
+    host == "accounts.google.com"
+        || (is_in_app_url(url)
+            && ["/servicelogin", "/signin", "/accountchooser"]
+                .iter()
+                .any(|p| url.path().to_ascii_lowercase().contains(p)))
+}
+
 /// Whether an out-of-app URL is safe to hand to the OS opener.
 pub fn is_openable_externally(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https" | "mailto" | "tel")
@@ -131,6 +141,21 @@ mod tests {
         assert!(!is_in_app_url(&u("file:///etc/passwd")));
         assert!(is_openable_externally(&u("mailto:a@b.c")));
         assert!(!is_openable_externally(&u("file:///etc/passwd")));
+    }
+
+    #[test]
+    fn sign_in() {
+        assert!(is_sign_in_url(&u(
+            "https://accounts.google.com/ServiceLogin?x=1"
+        )));
+        assert!(is_sign_in_url(&u(
+            "https://accounts.google.com/v3/signin/identifier"
+        )));
+        assert!(is_sign_in_url(&u(
+            "https://www.google.com/a/x/ServiceLogin"
+        )));
+        assert!(!is_sign_in_url(&u("https://chat.google.com/room/abc")));
+        assert!(!is_sign_in_url(&u("https://evil.com/signin")));
     }
 
     #[test]
