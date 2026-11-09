@@ -1,8 +1,12 @@
 # Active Logs
 
-Last updated: 2026-11-08
+Last updated: 2026-11-09
 
 ## Current Session
+
+### 2026-11-09T12:30:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Added `.github/workflows/arch-release.yml`, a manual workflow that builds the Arch package from a ref, publishes the matching draft release (creating its tag), and uploads the `.pkg.tar.zst` plus a checksummed PKGBUILD. Needed because v1.2.29902849 was released via `workflow_dispatch` (tag pushes are blocked from the agent environment), which skips the tag-only Arch upload steps in `release.yml`. Documentation review: README release steps unchanged; this log is the record.
 
 ### 2026-11-08T20:49:24Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 

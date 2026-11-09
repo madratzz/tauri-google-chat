@@ -1,0 +1,118 @@
+name: 'Publish Release + Arch package'
+
+# Manual follow-up for a draft release created by a workflow_dispatch run of
+# release.yml: builds the Arch package from `ref`, publishes the draft
+# (which creates its tag), then uploads the .pkg.tar.zst and a PKGBUILD whose
+# checksum matches the published tag tarball.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Commit or branch the draft release was built from'
+        required: true
+        default: main
+
+permissions:
+  contents: write
+
+jobs:
+  arch:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux/archlinux:latest
+    steps:
+      - name: Install git
+        run: pacman -Sy --noconfirm git
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Install build dependencies
+        run: |
+          pacman -S --noconfirm \
+            base-devel \
+            webkit2gtk-4.1 \
+            libayatana-appindicator \
+            librsvg \
+            patchelf \
+            nodejs \
+            npm \
+            dpkg \
+            curl
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install node dependencies
+        run: npm ci
+
+      - name: Build Tauri app
+        run: |
+          source "$HOME/.cargo/env"
+          npm run tauri build -- --bundles deb
+
+      - name: Create Arch package (.pkg.tar.zst)
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          fi
+
+          STAGING="$(pwd)/staging"
+          mkdir -p "$STAGING/usr/bin" "$STAGING/usr/share/pixmaps" "$STAGING/usr/share/applications"
+
+          install -m755 src-tauri/target/release/google-chat-desktop \
+            "$STAGING/usr/bin/google-chat-desktop"
+          install -m644 src-tauri/icons/icon.png \
+            "$STAGING/usr/share/pixmaps/google-chat-desktop.png"
+
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Name=Google Chat Desktop' \
+            'Exec=google-chat-desktop' \
+            'Icon=google-chat-desktop' \
+            'Type=Application' \
+            'Categories=Network;InstantMessaging;' \
+            'Comment=A Tauri desktop wrapper for Google Chat' \
+            > "$STAGING/usr/share/applications/google-chat-desktop.desktop"
+
+          SIZE=$(du -sk "$STAGING" | awk '{print $1 * 1024}')
+          printf '%s\n' \
+            'pkgname = google-chat-desktop' \
+            "pkgver = ${VERSION}-1" \
+            'pkgdesc = A Tauri desktop wrapper for Google Chat' \
+            'url = https://github.com/madratzz/tauri-google-chat' \
+            "builddate = $(date +%s)" \
+            'packager = GitHub Actions' \
+            "size = $SIZE" \
+            'arch = x86_64' \
+            'depend = webkit2gtk-4.1' \
+            'depend = libayatana-appindicator' \
+            > "$STAGING/.PKGINFO"
+
+          cd "$STAGING"
+          tar --zstd -cf "../google-chat-desktop-${VERSION}-1-x86_64.pkg.tar.zst" .
+
+      - name: Install GitHub CLI
+        run: pacman -S --noconfirm github-cli
+
+      - name: Publish release and upload Arch artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          SHA_REF=$(git rev-parse HEAD)
+          gh release edit "v$VERSION" --target "$SHA_REF" --draft=false --latest
+          sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+          SUM=$(curl -sfL "https://github.com/${GH_REPO}/archive/v${VERSION}.tar.gz" | sha256sum | cut -d' ' -f1)
+          sed -i "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
+          gh release upload "v$VERSION" google-chat-desktop-*-x86_64.pkg.tar.zst PKGBUILD --clobber
