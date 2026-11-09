@@ -19,7 +19,18 @@ Preferences are stored in `settings.json` in the platform app-config directory.
 
 ## Installation
 
-Download the latest release from the [Releases page](https://github.com/madratzz/tauri-google-chat/releases/latest).
+**Latest release: [v1.2.29902849](https://github.com/madratzz/tauri-google-chat/releases/tag/v1.2.29902849)** (2026-11-09) — adds the tray, unread badge and notifications, external-link handling, window-state memory, zoom, an offline banner and smaller, faster release builds. See the [changelog](CHANGELOG.md) for details.
+
+| Platform | Download |
+|---|---|
+| Windows (x64) | [`setup.exe`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/Google.Chat.Desktop_1.2.29902849_x64-setup.exe) · [`.msi`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/Google.Chat.Desktop_1.2.29902849_x64_en-US.msi) |
+| macOS (Apple Silicon) | [`.dmg`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/Google.Chat.Desktop_1.2.29902849_aarch64.dmg) |
+| Debian / Ubuntu | [`.deb`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/Google.Chat.Desktop_1.2.29902849_amd64.deb) |
+| Fedora / RPM | [`.rpm`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/Google.Chat.Desktop-1.2.29902849-1.x86_64.rpm) |
+| Arch Linux | [`.pkg.tar.zst`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/google-chat-desktop-1.2.29902849-1-x86_64.pkg.tar.zst) · [`PKGBUILD`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/PKGBUILD) |
+| Any Linux | [`.AppImage`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29902849/Google.Chat.Desktop_1.2.29902849_amd64.AppImage) |
+
+Older versions are on the [Releases page](https://github.com/madratzz/tauri-google-chat/releases).
 
 ### Windows
 
@@ -108,6 +119,10 @@ The bundled app will be created under `src-tauri/target/release/bundle`. Release
 ## Versioning
 
 Versions are `X.Y.Z` where `Z = floor(unix_seconds / 60)` (UTC minute). Windows MSI cannot hold a patch above 65,535, so the WiX version is `X.Y.floor(Z / 65536).(Z % 65536)` — configured in `src-tauri/tauri.conf.json` → `bundle.windows.wix.version`.
+
+## Releasing
+
+Push a `vX.Y.Z` tag to run `.github/workflows/release.yml`, which builds every platform into a draft release; publish the draft when it looks right. If the release was started manually instead (Actions → *Publish Release* → Run workflow), the Arch package is not uploaded: run *Publish Release + Arch package* (`arch-release.yml`) afterwards to publish the draft and attach the Arch files.
 
 ## Notes
 

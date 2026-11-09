@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-09T19:15:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+README: added the v1.2.29902849 release summary with direct download links per platform, and a Releasing section covering tag-triggered and manual (`arch-release.yml`) flows.
+
 ### 2026-11-09T18:35:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Fixed `release.yml`: the draft-release step passed the GraphQL node id (`gh release view --json id`) as `releaseId`, so once `tagName` was removed in 1.2 `tauri-action` skipped every upload and v1.2.29902849 was published with no assets. The step now looks up the numeric REST id and reuses an existing release, so the workflow can be re-run to attach assets.
