@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.29904303 — 2026-11-09T21:03:24Z
+
+Patch release (minor stays `2`). UTC-minute identifier `29904303`; Windows MSI version `1.2.456.19887`.
+
+- Fix: pressing **Sign in** did nothing on macOS. The 1.2 link allowlist ran on every navigation, and on macOS (WKWebView) that includes iframes and `javascript:` links, so Google sign-in was cancelled. The link policy now applies only to new-window requests; in-page navigation is never filtered.
+- Country Google domains (e.g. `google.co.uk`, `accounts.google.com.pk`) are treated as in-app hosts.
+
 ## 1.2.29902849 — 2026-11-08T20:49:24Z
 
 Minor release (backward-compatible features; minor `1` → `2`). UTC-minute identifier `29902849`; Windows MSI version `1.2.456.18433`.
