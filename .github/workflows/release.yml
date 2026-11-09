@@ -25,11 +25,20 @@ jobs:
           else
             VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           fi
-          gh release create "v$VERSION" \
-            --title "Google Chat Desktop v$VERSION" \
-            --draft \
-            --notes "See the assets to download this version and install."
-          id=$(gh release view "v$VERSION" --json id --jq .id)
+          # Re-runnable: reuse the release if it already exists (draft or published).
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"v$VERSION\") | .id" | head -1)
+          if [ -z "$id" ]; then
+            gh release create "v$VERSION" \
+              --target "$GITHUB_SHA" \
+              --title "Google Chat Desktop v$VERSION" \
+              --draft \
+              --notes "See the assets to download this version and install."
+            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+              --jq ".[] | select(.tag_name == \"v$VERSION\") | .id" | head -1)
+          fi
+          # tauri-action needs the numeric REST id, not the GraphQL node id.
+          test -n "$id"
           echo "id=$id" >> "$GITHUB_OUTPUT"
 
   publish-tauri:
