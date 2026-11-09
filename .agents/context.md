@@ -19,7 +19,7 @@ Google Chat Desktop is a Rust/Tauri 2 desktop wrapper for `https://chat.google.c
 - `src-tauri/src/lib.rs` creates the main webview, menus, tray, unread badge/notifications, navigation policy, and the in-window peek overlay.
 - `src-tauri/src/util.rs` holds pure, unit-tested helpers (URL allowlist, titles, unread parsing, peek geometry, zoom).
 - `src-tauri/src/settings.rs` persists icon and zoom preferences to `settings.json` in the app config dir.
-- `.github/workflows/ci.yml` runs fmt/clippy/tests on PRs; `release.yml` publishes tagged releases.
+- `.github/workflows/ci.yml` runs fmt/clippy/tests on PRs; `release.yml` builds all platforms (Arch repackaged from the .deb by `.github/scripts/arch-package.sh`) and publishes, from a tag or a manual run.
 - `src-tauri/tauri.conf.json` defines bundle metadata, targets, and icon assets.
 - `.agents/` holds concise active context; `.archive/` holds immutable dated snapshots.
 

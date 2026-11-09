@@ -48,7 +48,7 @@ Open the `.dmg`, drag the app to Applications, then right-click → Open the fir
 # Install the pre-built package directly
 sudo pacman -U google-chat-desktop-*-x86_64.pkg.tar.zst
 
-# Or build from source using the PKGBUILD
+# Or install via the release PKGBUILD (repackages the released .deb)
 curl -O https://github.com/madratzz/tauri-google-chat/releases/latest/download/PKGBUILD
 makepkg -si
 ```
@@ -122,7 +122,16 @@ Versions are `X.Y.Z` where `Z = floor(unix_seconds / 60)` (UTC minute). Windows 
 
 ## Releasing
 
-Push a `vX.Y.Z` tag to run `.github/workflows/release.yml`, which builds every platform into a draft release; publish the draft when it looks right. If the release was started manually instead (Actions → *Publish Release* → Run workflow), the Arch package is not uploaded: run *Publish Release + Arch package* (`arch-release.yml`) afterwards to publish the draft and attach the Arch files.
+`.github/workflows/release.yml` runs on a pushed `vX.Y.Z` tag, or manually (Actions → *Publish Release* → Run workflow; it takes the version from `src-tauri/Cargo.toml`). Either way it:
+
+1. creates (or reuses) the draft release for that version;
+2. builds macOS, Windows and Linux bundles and uploads them;
+3. builds the Arch `.pkg.tar.zst` and a binary `PKGBUILD` from the Linux `.deb` (`.github/scripts/arch-package.sh`) and uploads them;
+4. publishes the release as latest once every platform succeeded (untick *publish* on a manual run to keep it as a draft).
+
+Re-running a failed run is safe: the release is reused and Arch assets are replaced.
+
+The repository `PKGBUILD` builds from source and is for local use; the one attached to each release installs the prebuilt binary.
 
 ## Notes
 
