@@ -17,7 +17,22 @@ permissions:
   contents: write
 
 jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Publish draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          gh release edit "v$VERSION" --target "$(git rev-parse HEAD)" --draft=false --latest
+
   arch:
+    needs: publish
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -103,15 +118,13 @@ jobs:
       - name: Install GitHub CLI
         run: pacman -S --noconfirm github-cli
 
-      - name: Publish release and upload Arch artifacts
+      - name: Upload Arch artifacts
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
           VERSION=$(grep '^version' src-tauri/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
-          SHA_REF=$(git rev-parse HEAD)
-          gh release edit "v$VERSION" --target "$SHA_REF" --draft=false --latest
           sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
           SUM=$(curl -sfL "https://github.com/${GH_REPO}/archive/v${VERSION}.tar.gz" | sha256sum | cut -d' ' -f1)
           sed -i "s/^sha256sums=.*/sha256sums=('$SUM')/" PKGBUILD
