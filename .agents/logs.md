@@ -1,8 +1,16 @@
 # Active Logs
 
-Last updated: 2026-09-14
+Last updated: 2026-11-08
 
 ## Current Session
+
+### 2026-11-08T20:49:24Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Implemented the review/improvement plan (speed, security, responsive UI, UX, CI) as version `1.2.29902849`. Work was done on the session-designated branch `claude/jolly-dijkstra-mea4sv` because no `development` branch exists.
+
+Files touched: `src-tauri/src/{lib,util,settings}.rs`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `src-tauri/tauri.conf.json`, `package.json`, `package-lock.json`, `PKGBUILD`, `.github/workflows/{ci,release}.yml`, `README.md`, `CHANGELOG.md`, `.agents/context.md`, `.agents/logs.md`.
+
+Verification: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` (5 tests), and `cargo build --release` on Linux. Not run on macOS/Windows or against a live Google account.
 
 ### 2026-09-14T15:45:22+05:00 — codex/root
 

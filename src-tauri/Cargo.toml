@@ -1,10 +1,10 @@
 [package]
 name = "google-chat-desktop"
-version = "1.1.29823045"
+version = "1.2.29902849"
 description = "A Tauri desktop wrapper for Google Chat"
 authors = ["madratzz"]
 edition = "2021"
-rust-version = "1.77"
+rust-version = "1.80"
 
 [lib]
 name = "google_chat_desktop_lib"
@@ -14,8 +14,22 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "unstable"] }
+serde_json = "1"
+tauri = { version = "2", features = ["image-png", "tray-icon", "unstable"] }
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+tauri-plugin-window-state = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-cocoa = "0.25"
-objc = "0.2.7"
+objc2 = "0.6"
+objc2-app-kit = "0.3"
+objc2-foundation = "0.3"
+
+# Smaller, faster release binaries: whole-program optimisation, stripped symbols.
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
