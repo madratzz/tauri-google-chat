@@ -18,6 +18,21 @@ fn host_matches(host: &str, suffix: &str) -> bool {
     host == suffix || host.ends_with(&format!(".{suffix}"))
 }
 
+/// Country Google domains used during sign-in, e.g. `google.co.uk`, `accounts.google.com.pk`.
+fn is_google_country_domain(host: &str) -> bool {
+    let labels: Vec<&str> = host.split('.').collect();
+    let Some(i) = labels.iter().rposition(|l| *l == "google") else {
+        return false;
+    };
+    let tld = &labels[i + 1..];
+    let is_cc = |l: &str| l.len() == 2 && l.chars().all(|c| c.is_ascii_lowercase());
+    match tld {
+        [cc] => is_cc(cc),
+        [sld, cc] => matches!(*sld, "co" | "com") && is_cc(cc),
+        _ => false,
+    }
+}
+
 /// Whether a URL may be shown inside an app webview.
 pub fn is_in_app_url(url: &Url) -> bool {
     match url.scheme() {
@@ -26,6 +41,7 @@ pub fn is_in_app_url(url: &Url) -> bool {
             let host = host.to_ascii_lowercase();
             GOOGLE_EXACT.contains(&host.as_str())
                 || GOOGLE_SUFFIXES.iter().any(|s| host_matches(&host, s))
+                || is_google_country_domain(&host)
         }),
         _ => false,
     }
@@ -106,6 +122,11 @@ mod tests {
         assert!(is_in_app_url(&u("about:blank")));
         assert!(!is_in_app_url(&u("https://evilgoogle.com/")));
         assert!(!is_in_app_url(&u("https://google.com.evil.io/")));
+        assert!(is_in_app_url(&u("https://accounts.google.com.pk/x")));
+        assert!(is_in_app_url(&u("https://www.google.co.uk/")));
+        assert!(is_in_app_url(&u("https://google.de/")));
+        assert!(!is_in_app_url(&u("https://google.evil.com/")));
+        assert!(!is_in_app_url(&u("https://google.co.evil/")));
         assert!(!is_in_app_url(&u("https://github.com/")));
         assert!(!is_in_app_url(&u("file:///etc/passwd")));
         assert!(is_openable_externally(&u("mailto:a@b.c")));

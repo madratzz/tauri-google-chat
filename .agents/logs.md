@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-09T21:03:24Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.2.29904303: fixed macOS sign-in. wry's WKWebView navigation handler fires for all frames and `javascript:` URLs (no main-frame filter, see wry `wkwebview/navigation.rs`), so the 1.2 `on_navigation` allowlist cancelled Google sign-in. Removed `on_navigation` filtering from all webviews (peek keeps only its sentinel handling); link policy now lives in `on_new_window`. Added Google country-domain matching with tests.
+
 ### 2026-11-09T19:15:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 README: added the v1.2.29902849 release summary with direct download links per platform, and a Releasing section covering tag-triggered and manual (`arch-release.yml`) flows.

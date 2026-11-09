@@ -31,3 +31,5 @@ Detailed May 2026 Tauri, WebView2, icon, and packaging findings were archived du
 
 - [Archived Learnings Index](../.archive/learnings/INDEX.md)
 - [2026-05-22 Tauri webview history](../.archive/learnings/learnings-2026-05-22-tauri-webview-history.md)
+
+- 2026-11-09: On macOS, wry/Tauri `on_navigation` is called for subframe and `javascript:` navigations too. Never use it as a host allowlist on Google pages; apply link policy in `on_new_window` instead.

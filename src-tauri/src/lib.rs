@@ -136,10 +136,6 @@ pub fn run() {
             .resizable(true)
             .user_agent(SAFARI_USER_AGENT)
             .initialization_script(OFFLINE_JS)
-            .on_navigation({
-                let app = handle.clone();
-                move |url| allow_or_open_externally(&app, url)
-            })
             .on_new_window(move |url, _| {
                 if is_in_app_url(&url) {
                     create_peek_overlay(&app_new_window, url);
@@ -374,15 +370,10 @@ fn toggle_main(app: &AppHandle) {
     }
 }
 
-/// Navigation policy shared by every webview: Google hosts stay in the app,
-/// everything else is handed to the system browser.
-fn allow_or_open_externally(app: &AppHandle, url: &Url) -> bool {
-    if is_in_app_url(url) {
-        return true;
-    }
-    open_externally(app, url);
-    false
-}
+// Link policy is applied only to new-window requests (how Chat opens message
+// links). In-page navigations are never filtered: on macOS the navigation
+// handler also fires for iframes and `javascript:` links, and filtering them
+// breaks Google sign-in.
 
 fn open_externally(app: &AppHandle, url: &Url) {
     if !is_openable_externally(url) {
@@ -472,7 +463,7 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
                 }
                 return false;
             }
-            allow_or_open_externally(&app_for_nav, nav_url)
+            true
         })
         .on_new_window(move |url, _| {
             if is_in_app_url(&url) {
@@ -513,7 +504,6 @@ fn open_child_window(app: &AppHandle, url: Url) {
         "expanded-{}",
         CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed)
     );
-    let app_nav = app.clone();
     let app_new = app.clone();
 
     // Creating a new WebviewWindow (instead of navigate()) avoids corrupting
@@ -524,7 +514,6 @@ fn open_child_window(app: &AppHandle, url: Url) {
         .min_inner_size(480.0, 360.0)
         .resizable(true)
         .user_agent(SAFARI_USER_AGENT)
-        .on_navigation(move |u| allow_or_open_externally(&app_nav, u))
         .on_new_window(move |new_url, _| {
             if is_in_app_url(&new_url) {
                 let app = app_new.clone();

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Google Chat Desktop",
-  "version": "1.2.29902849",
+  "version": "1.2.29904303",
   "identifier": "com.madratzz.google-chat-desktop",
   "app": {
     "security": {
@@ -21,7 +21,7 @@
     "category": "Productivity",
     "windows": {
       "wix": {
-        "version": "1.2.456.18433"
+        "version": "1.2.456.19887"
       }
     },
     "macOS": {
