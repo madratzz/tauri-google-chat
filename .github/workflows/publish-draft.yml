@@ -1,0 +1,33 @@
+name: 'Publish draft release'
+
+# Manually publish an existing draft release (e.g. before every platform has
+# finished uploading). Assets uploaded later by release.yml still land on it.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version without the leading v (e.g. 1.2.29904303)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
+            --jq ".[] | select(.tag_name == \"v$VERSION\") | .id" | head -1)
+          test -n "$ID" || { echo "No release for v$VERSION"; exit 1; }
+          DRAFT=$(gh api "repos/$GITHUB_REPOSITORY/releases/$ID" --jq .draft)
+          if [ "$DRAFT" = "true" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ID" \
+              -F draft=false -f make_latest=true --jq .html_url
+          else
+            echo "v$VERSION is already published."
+          fi
