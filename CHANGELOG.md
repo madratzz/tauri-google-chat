@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.29904373 — 2026-11-09T22:13:05Z
+
+Patch release. UTC-minute identifier `29904373`; Windows MSI version `1.2.456.19957`.
+
+- Fix (macOS sign-in, second attempt): Google sign-in links that open a new window now load in the main window instead of the peek overlay, and the peek overlay is created outside the new-window callback (creating a webview inside it is unsafe on macOS).
+- Diagnostics: the app logs new-window requests, page loads and links sent to the browser to stderr (run the app binary from Terminal to see them), and right-click → Inspect Element is enabled.
+
 ## 1.2.29904303 — 2026-11-09T21:03:24Z
 
 Patch release (minor stays `2`). UTC-minute identifier `29904303`; Windows MSI version `1.2.456.19887`.

@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-09T22:13:05Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.2.29904373: user reported sign-in still does nothing on an M1 Mac after 1.2.29904303. Sign-in URLs from `on_new_window` now navigate the main window; peek creation is deferred out of the callback; added stderr logging and the Tauri `devtools` feature for diagnosis. Root cause not yet confirmed on hardware.
+
 ### 2026-11-09T21:45:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Reworked Arch packaging in `release.yml` after repeated failures (container job not starting, tag-only upload steps, PKGBUILD needing a published tag tarball, `arch-release.yml` 403 on published releases). The Linux job now repackages its `.deb` into `.pkg.tar.zst` plus a binary PKGBUILD via `.github/scripts/arch-package.sh` and uploads by release id; a final `publish-release` job publishes the draft when all platforms succeed. Removed `arch-release.yml`. Script tested locally with a synthetic .deb.
