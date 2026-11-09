@@ -29,13 +29,13 @@ jobs:
           id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
             --jq ".[] | select(.tag_name == \"v$VERSION\") | .id" | head -1)
           if [ -z "$id" ]; then
-            gh release create "v$VERSION" \
-              --target "$GITHUB_SHA" \
-              --title "Google Chat Desktop v$VERSION" \
-              --draft \
-              --notes "See the assets to download this version and install."
-            id=$(gh api "repos/$GITHUB_REPOSITORY/releases" --paginate \
-              --jq ".[] | select(.tag_name == \"v$VERSION\") | .id" | head -1)
+            # Take the id from the create response: the release list can lag behind.
+            id=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases" \
+              -f tag_name="v$VERSION" \
+              -f target_commitish="$GITHUB_SHA" \
+              -f name="Google Chat Desktop v$VERSION" \
+              -f body="See the assets to download this version and install." \
+              -F draft=true --jq .id)
           fi
           # tauri-action needs the numeric REST id, not the GraphQL node id.
           test -n "$id"
