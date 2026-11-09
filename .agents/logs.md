@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-09T21:45:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Reworked Arch packaging in `release.yml` after repeated failures (container job not starting, tag-only upload steps, PKGBUILD needing a published tag tarball, `arch-release.yml` 403 on published releases). The Linux job now repackages its `.deb` into `.pkg.tar.zst` plus a binary PKGBUILD via `.github/scripts/arch-package.sh` and uploads by release id; a final `publish-release` job publishes the draft when all platforms succeed. Removed `arch-release.yml`. Script tested locally with a synthetic .deb.
+
 ### 2026-11-09T21:03:24Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.2.29904303: fixed macOS sign-in. wry's WKWebView navigation handler fires for all frames and `javascript:` URLs (no main-frame filter, see wry `wkwebview/navigation.rs`), so the 1.2 `on_navigation` allowlist cancelled Google sign-in. Removed `on_navigation` filtering from all webviews (peek keeps only its sentinel handling); link policy now lives in `on_new_window`. Added Google country-domain matching with tests.
