@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-09T18:35:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Fixed `release.yml`: the draft-release step passed the GraphQL node id (`gh release view --json id`) as `releaseId`, so once `tagName` was removed in 1.2 `tauri-action` skipped every upload and v1.2.29902849 was published with no assets. The step now looks up the numeric REST id and reuses an existing release, so the workflow can be re-run to attach assets.
+
 ### 2026-11-09T12:30:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Added `.github/workflows/arch-release.yml`, a manual workflow that builds the Arch package from a ref, publishes the matching draft release (creating its tag), and uploads the `.pkg.tar.zst` plus a checksummed PKGBUILD. Needed because v1.2.29902849 was released via `workflow_dispatch` (tag pushes are blocked from the agent environment), which skips the tag-only Arch upload steps in `release.yml`. Documentation review: README release steps unchanged; this log is the record.
