@@ -1,4 +1,4 @@
-//! Tiny persisted preferences (icon variant, zoom) stored as JSON in the app config dir.
+//! Tiny persisted preferences (icon variant, zoom, title bar theme) stored as JSON in the app config dir.
 
 use std::{fs, path::PathBuf, sync::Mutex};
 
@@ -11,6 +11,8 @@ use crate::util::clamp_zoom;
 pub struct Settings {
     pub icon: String,
     pub zoom: f64,
+    /// "system", "light" or "dark".
+    pub title_bar: String,
 }
 
 impl Default for Settings {
@@ -18,6 +20,7 @@ impl Default for Settings {
         Self {
             icon: "color".into(),
             zoom: 1.0,
+            title_bar: "system".into(),
         }
     }
 }
@@ -44,6 +47,11 @@ pub fn load(app: &AppHandle) -> Settings {
             s.icon = icon.into();
         }
     }
+    if let Some(t) = v.get("title_bar").and_then(Value::as_str) {
+        if matches!(t, "system" | "light" | "dark") {
+            s.title_bar = t.into();
+        }
+    }
     if let Some(z) = v.get("zoom").and_then(Value::as_f64) {
         s.zoom = clamp_zoom(z);
     }
@@ -64,7 +72,7 @@ pub fn update(app: &AppHandle, f: impl FnOnce(&mut Settings)) -> Settings {
         if let Some(dir) = p.parent() {
             let _ = fs::create_dir_all(dir);
         }
-        let body = json!({ "icon": snapshot.icon, "zoom": snapshot.zoom });
+        let body = json!({ "icon": snapshot.icon, "zoom": snapshot.zoom, "title_bar": snapshot.title_bar });
         if let Err(e) = fs::write(&p, body.to_string()) {
             eprintln!("failed to save settings: {e}");
         }

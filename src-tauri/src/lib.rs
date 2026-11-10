@@ -206,6 +206,7 @@ pub fn run() {
                 Err(e) => eprintln!("tray unavailable, closing the window will quit: {e}"),
             }
             apply_icon(&handle, &prefs);
+            apply_title_bar(&handle, &prefs);
             Ok(())
         })
         .on_menu_event(|app, event| handle_menu(app, event.id().as_ref()))
@@ -245,6 +246,17 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &MenuItem::with_id(app, "icon-color", "Color", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-dark", "Dark", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-white", "White", true, None::<&str>)?,
+        ],
+    )?;
+
+    let title_bar_menu = Submenu::with_items(
+        app,
+        "Title Bar",
+        true,
+        &[
+            &MenuItem::with_id(app, "titlebar-system", "Match System", true, None::<&str>)?,
+            &MenuItem::with_id(app, "titlebar-light", "Light", true, None::<&str>)?,
+            &MenuItem::with_id(app, "titlebar-dark", "Dark", true, None::<&str>)?,
         ],
     )?;
 
@@ -296,6 +308,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &zoom_reset,
             &sep()?,
             &icon_menu,
+            &title_bar_menu,
         ],
     )?;
 
@@ -377,6 +390,12 @@ fn handle_menu(app: &AppHandle, id: &str) {
         "icon-color" | "icon-dark" | "icon-white" => {
             let s = settings::update(app, |s| s.icon = id.trim_start_matches("icon-").into());
             apply_icon(app, &s);
+        }
+        "titlebar-system" | "titlebar-light" | "titlebar-dark" => {
+            let s = settings::update(app, |s| {
+                s.title_bar = id.trim_start_matches("titlebar-").into()
+            });
+            apply_title_bar(app, &s);
         }
         "show" => show_main(app),
         "quit" => app.exit(0),
@@ -652,6 +671,19 @@ fn peek_size_and_position_logical(app: &AppHandle) -> (LogicalSize<f64>, Logical
     let scale = main_window.scale_factor().unwrap_or(1.0);
     let (x, y, w, h) = util::peek_geometry(phys.width as f64 / scale, phys.height as f64 / scale);
     (LogicalSize::new(w, h), LogicalPosition::new(x, y))
+}
+
+/// Sets the native window appearance (title bar) to follow the system or a
+/// fixed light/dark theme, since it can't see Google Chat's own theme.
+fn apply_title_bar(app: &AppHandle, prefs: &Settings) {
+    let theme = match prefs.title_bar.as_str() {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    };
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_theme(theme);
+    }
 }
 
 fn apply_icon(app: &AppHandle, prefs: &Settings) {
