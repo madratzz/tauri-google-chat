@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-10T07:22:32Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.2.29904922: user's `[gcd]` log on an M1 Mac showed signed-out `chat.google.com` lands on `workspace.google.com/products/chat/` and clicking Sign in emits nothing. Main-window `on_page_load` now redirects that landing page to `accounts.google.com/ServiceLogin?service=dynamite&continue=https://chat.google.com/` (rate-limited to once per minute).
+
 ### 2026-11-09T22:13:05Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.2.29904373: user reported sign-in still does nothing on an M1 Mac after 1.2.29904303. Sign-in URLs from `on_new_window` now navigate the main window; peek creation is deferred out of the callback; added stderr logging and the Tauri `devtools` feature for diagnosis. Root cause not yet confirmed on hardware.

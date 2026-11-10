@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.29904922 — 2026-11-10T07:22:32Z
+
+Patch release. UTC-minute identifier `29904922`; Windows MSI version `1.2.456.20506`.
+
+- Fix: sign-in on macOS. When signed out, `chat.google.com` redirects to the Google Workspace marketing page, whose **Sign in** button does nothing in an embedded webview (diagnostic logs showed no navigation or new-window request on click). The app now detects that page and opens Google's sign-in for Chat directly, at most once a minute to avoid redirect loops.
+
 ## 1.2.29904373 — 2026-11-09T22:13:05Z
 
 Patch release. UTC-minute identifier `29904373`; Windows MSI version `1.2.456.19957`.

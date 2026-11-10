@@ -57,6 +57,12 @@ pub fn is_sign_in_url(url: &Url) -> bool {
                 .any(|p| url.path().to_ascii_lowercase().contains(p)))
 }
 
+/// The marketing page chat.google.com redirects to when signed out.
+pub fn is_signed_out_landing(url: &Url) -> bool {
+    url.host_str() == Some("workspace.google.com")
+        && url.path().trim_end_matches('/').ends_with("/products/chat")
+}
+
 /// Whether an out-of-app URL is safe to hand to the OS opener.
 pub fn is_openable_externally(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https" | "mailto" | "tel")
@@ -156,6 +162,20 @@ mod tests {
         )));
         assert!(!is_sign_in_url(&u("https://chat.google.com/room/abc")));
         assert!(!is_sign_in_url(&u("https://evil.com/signin")));
+    }
+
+    #[test]
+    fn signed_out_landing() {
+        assert!(is_signed_out_landing(&u(
+            "https://workspace.google.com/products/chat/"
+        )));
+        assert!(is_signed_out_landing(&u(
+            "https://workspace.google.com/intl/en/products/chat/"
+        )));
+        assert!(!is_signed_out_landing(&u(
+            "https://workspace.google.com/pricing"
+        )));
+        assert!(!is_signed_out_landing(&u("https://chat.google.com/")));
     }
 
     #[test]
