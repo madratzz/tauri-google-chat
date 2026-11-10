@@ -11,7 +11,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    webview::{NewWindowResponse, WebviewBuilder},
+    webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
     AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
 };
@@ -21,11 +21,15 @@ use tauri_plugin_window_state::StateFlags;
 
 use settings::{Settings, SettingsState};
 use util::{
-    clamp_zoom, is_in_app_url, is_openable_externally, is_sign_in_url, title_for_url,
-    unread_from_title,
+    clamp_zoom, is_in_app_url, is_openable_externally, is_sign_in_url, is_signed_out_landing,
+    title_for_url, unread_from_title,
 };
 
 const CHAT_URL: &str = "https://chat.google.com/";
+/// Google sign-in for Chat; returns to Chat afterwards (and passes straight
+/// through when already signed in).
+const SIGN_IN_URL: &str =
+    "https://accounts.google.com/ServiceLogin?service=dynamite&continue=https%3A%2F%2Fchat.google.com%2F";
 // Intentional: Google blocks some embedded-browser user agents. Retest before changing.
 const SAFARI_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15";
 const COLOR_ICON: &[u8] = include_bytes!("../icons/google-chat-color.png");
@@ -154,9 +158,23 @@ pub fn run() {
                 }
                 NewWindowResponse::Deny
             })
-            .on_page_load(|webview, payload| {
-                eprintln!("[gcd] main page {:?}: {}", payload.event(), payload.url());
-                let _ = webview;
+            .on_page_load({
+                let app = handle.clone();
+                move |_, payload| {
+                    eprintln!("[gcd] main page {:?}: {}", payload.event(), payload.url());
+                    // Signed out, chat.google.com redirects to a marketing page whose
+                    // Sign in button does nothing in an embedded webview. Go straight
+                    // to Google's sign-in for Chat instead.
+                    if matches!(payload.event(), PageLoadEvent::Started)
+                        && is_signed_out_landing(payload.url())
+                        && claim_sign_in_redirect()
+                    {
+                        let url: Url = SIGN_IN_URL.parse().expect("valid sign-in URL");
+                        eprintln!("[gcd] signed-out landing page; opening {url}");
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move { navigate_main(&app, url) });
+                    }
+                }
             })
             .on_document_title_changed({
                 let app = handle.clone();
@@ -388,6 +406,22 @@ fn toggle_main(app: &AppHandle) {
 // links). In-page navigations are never filtered: on macOS the navigation
 // handler also fires for iframes and `javascript:` links, and filtering them
 // breaks Google sign-in.
+
+/// Allows at most one automatic sign-in redirect per minute, so an account
+/// that keeps landing on the marketing page can't loop.
+fn claim_sign_in_redirect() -> bool {
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let last = LAST.load(Ordering::Relaxed);
+    if now.saturating_sub(last) < 60 {
+        return false;
+    }
+    LAST.store(now, Ordering::Relaxed);
+    true
+}
 
 /// Loads `url` in the main window (used for Google sign-in pages).
 fn navigate_main(app: &AppHandle, url: Url) {
