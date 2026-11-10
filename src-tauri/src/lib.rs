@@ -11,7 +11,7 @@ use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
+    webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, WebviewBuilder},
     AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
 };
@@ -144,6 +144,7 @@ pub fn run() {
             .user_agent(SAFARI_USER_AGENT)
             // Let file drops reach the page (Chat attachments) instead of Tauri.
             .disable_drag_drop_handler()
+            .on_download(|webview, event| handle_download(webview.app_handle(), event))
             .initialization_script(OFFLINE_JS)
             .on_new_window(move |url, _| {
                 eprintln!("[gcd] new window requested: {url}");
@@ -444,6 +445,53 @@ fn claim_sign_in_redirect() -> bool {
     true
 }
 
+/// Path of the download in progress, for the completion notification
+/// (macOS doesn't report the final path).
+static LAST_DOWNLOAD: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+
+/// Saves downloads to the user's Downloads folder without overwriting, and
+/// notifies when done. Without a handler, WKWebView cancels every download.
+fn handle_download(app: &AppHandle, event: DownloadEvent<'_>) -> bool {
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            let Ok(dir) = app.path().download_dir() else {
+                eprintln!("[gcd] no Downloads folder; download cancelled: {url}");
+                return false;
+            };
+            let name = util::download_file_name(destination.file_name(), &url);
+            let path = util::unique_path(&dir, &name, |p| p.exists());
+            eprintln!("[gcd] downloading {url} -> {}", path.display());
+            *destination = path.clone();
+            if let Ok(mut last) = LAST_DOWNLOAD.lock() {
+                *last = Some(path);
+            }
+            true
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            let path = path.or_else(|| LAST_DOWNLOAD.lock().ok().and_then(|mut l| l.take()));
+            let name = path
+                .as_deref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "file".into());
+            eprintln!("[gcd] download finished (success={success}): {url}");
+            let body = if success {
+                format!("Saved {name} to Downloads")
+            } else {
+                format!("Download of {name} failed")
+            };
+            let _ = app
+                .notification()
+                .builder()
+                .title("Google Chat")
+                .body(body)
+                .show();
+            true
+        }
+        _ => true,
+    }
+}
+
 /// Loads `url` in the main window (used for Google sign-in pages).
 fn navigate_main(app: &AppHandle, url: Url) {
     let app2 = app.clone();
@@ -532,6 +580,7 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
         .user_agent(SAFARI_USER_AGENT)
         // Let file drops reach the page (Chat attachments) instead of Tauri.
         .disable_drag_drop_handler()
+        .on_download(|webview, event| handle_download(webview.app_handle(), event))
         .initialization_script(PEEK_TOOLBAR_JS)
         .on_navigation(move |nav_url| {
             if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
@@ -602,6 +651,7 @@ fn open_child_window(app: &AppHandle, url: Url) {
         .user_agent(SAFARI_USER_AGENT)
         // Let file drops reach the page (Chat attachments) instead of Tauri.
         .disable_drag_drop_handler()
+        .on_download(|webview, event| handle_download(webview.app_handle(), event))
         .on_new_window(move |new_url, _| {
             if is_in_app_url(&new_url) {
                 let app = app_new.clone();

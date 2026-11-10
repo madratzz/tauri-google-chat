@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.29905200 — 2026-11-10T12:00:43Z
+
+Patch release. UTC-minute identifier `29905200`; Windows MSI version `1.3.456.20784`.
+
+- Fix: clicking Download in Chat's file viewer got stuck. With no download handler, WKWebView cancels every download. All webviews now save downloads to the Downloads folder (unique name, sanitised) and show a notification on completion.
+
 ## 1.3.29905158 — 2026-11-10T11:18:44Z
 
 Patch release. UTC-minute identifier `29905158`; Windows MSI version `1.3.456.20742`.

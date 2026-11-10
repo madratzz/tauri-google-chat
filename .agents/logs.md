@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-10T12:00:43Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29905200: user reported Download in the file viewer hangs. wry cancels downloads when no handler is registered (`wkwebview/navigation.rs`). Added `on_download` on all webviews: save to `download_dir()` via `util::download_file_name` + `util::unique_path` (tested), notify on finish.
+
 ### 2026-11-10T11:18:44Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.3.29905158: user reported drag-and-drop file attachments not working. Added `disable_drag_drop_handler()` to all webview builders so HTML5 drops reach Google Chat.

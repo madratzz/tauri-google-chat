@@ -1,5 +1,8 @@
 //! Pure helpers kept free of Tauri runtime types so they can be unit tested.
 
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
 use tauri::Url;
 
 /// Hosts that stay inside the app. Everything else opens in the system browser.
@@ -61,6 +64,59 @@ pub fn is_sign_in_url(url: &Url) -> bool {
 pub fn is_signed_out_landing(url: &Url) -> bool {
     url.host_str() == Some("workspace.google.com")
         && url.path().trim_end_matches('/').ends_with("/products/chat")
+}
+
+/// File name for a download: the webview's suggestion, else the URL's last
+/// path segment, else "download". Never contains path separators.
+pub fn download_file_name(suggested: Option<&OsStr>, url: &Url) -> String {
+    let from_url = || {
+        url.path_segments()
+            .and_then(|mut s| s.next_back())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string())
+    };
+    let raw = suggested
+        .map(|s| s.to_string_lossy().into_owned())
+        .filter(|s| !s.is_empty())
+        .or_else(from_url)
+        .unwrap_or_else(|| "download".into());
+    let clean: String = raw
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let clean = clean.trim_start_matches('.').to_string();
+    if clean.is_empty() {
+        "download".into()
+    } else {
+        clean
+    }
+}
+
+/// `dir/name`, or `dir/name (2).ext`, `(3)`… if taken.
+pub fn unique_path(dir: &Path, name: &str, exists: impl Fn(&Path) -> bool) -> PathBuf {
+    let first = dir.join(name);
+    if !exists(&first) {
+        return first;
+    }
+    let p = Path::new(name);
+    let stem = p
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let ext = p
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+    (2..)
+        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
+        .find(|c| !exists(c))
+        .expect("unbounded range")
 }
 
 /// Whether an out-of-app URL is safe to hand to the OS opener.
@@ -176,6 +232,37 @@ mod tests {
             "https://workspace.google.com/pricing"
         )));
         assert!(!is_signed_out_landing(&u("https://chat.google.com/")));
+    }
+
+    #[test]
+    fn downloads() {
+        let url = u("https://chat.google.com/api/get_attachment_url?x=1");
+        assert_eq!(
+            download_file_name(Some(OsStr::new("report.pdf")), &url),
+            "report.pdf"
+        );
+        assert_eq!(
+            download_file_name(None, &u("https://x.google.com/a/b/file.png")),
+            "file.png"
+        );
+        assert_eq!(
+            download_file_name(Some(OsStr::new("../etc/x")), &url),
+            "_etc_x"
+        );
+        assert_eq!(
+            download_file_name(None, &u("https://x.google.com/")),
+            "download"
+        );
+        let dir = Path::new("/dl");
+        let taken = [PathBuf::from("/dl/a.pdf"), PathBuf::from("/dl/a (2).pdf")];
+        assert_eq!(
+            unique_path(dir, "b.pdf", |p| taken.iter().any(|t| t == p)),
+            PathBuf::from("/dl/b.pdf")
+        );
+        assert_eq!(
+            unique_path(dir, "a.pdf", |p| taken.iter().any(|t| t == p)),
+            PathBuf::from("/dl/a (3).pdf")
+        );
     }
 
     #[test]

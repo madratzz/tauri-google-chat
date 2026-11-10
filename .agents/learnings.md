@@ -37,3 +37,5 @@ Detailed May 2026 Tauri, WebView2, icon, and packaging findings were archived du
 - 2026-11-10: Signed-out `chat.google.com` redirects to `workspace.google.com/products/chat/`, whose Sign in button is inert in an embedded WKWebView. Send signed-out users to `accounts.google.com/ServiceLogin?service=dynamite&continue=…` instead.
 
 - 2026-11-10: Tauri's default drag-drop handler swallows OS file drops; remote web apps that accept dropped files need `disable_drag_drop_handler()` on every webview.
+
+- 2026-11-10: wry cancels downloads when no download handler is set; every webview needs `on_download` that assigns an absolute destination.
