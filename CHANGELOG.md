@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.29905158 — 2026-11-10T11:18:44Z
+
+Patch release. UTC-minute identifier `29905158`; Windows MSI version `1.3.456.20742`.
+
+- Fix: dragging files into Google Chat (attachments) did nothing. Tauri's native file-drop handler intercepted the drop before the page saw it; it is now disabled on the main, peek and pop-out webviews.
+
 ## 1.3.29904943 — 2026-11-10T07:43:45Z
 
 Minor release (backward-compatible feature; minor `2` → `3`). UTC-minute identifier `29904943`; Windows MSI version `1.3.456.20527`.

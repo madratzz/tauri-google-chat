@@ -142,6 +142,8 @@ pub fn run() {
             .min_inner_size(600.0, 400.0)
             .resizable(true)
             .user_agent(SAFARI_USER_AGENT)
+            // Let file drops reach the page (Chat attachments) instead of Tauri.
+            .disable_drag_drop_handler()
             .initialization_script(OFFLINE_JS)
             .on_new_window(move |url, _| {
                 eprintln!("[gcd] new window requested: {url}");
@@ -528,6 +530,8 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
     let app_for_new = app.clone();
     let builder = WebviewBuilder::new("peek", WebviewUrl::External(url))
         .user_agent(SAFARI_USER_AGENT)
+        // Let file drops reach the page (Chat attachments) instead of Tauri.
+        .disable_drag_drop_handler()
         .initialization_script(PEEK_TOOLBAR_JS)
         .on_navigation(move |nav_url| {
             if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
@@ -596,6 +600,8 @@ fn open_child_window(app: &AppHandle, url: Url) {
         .min_inner_size(480.0, 360.0)
         .resizable(true)
         .user_agent(SAFARI_USER_AGENT)
+        // Let file drops reach the page (Chat attachments) instead of Tauri.
+        .disable_drag_drop_handler()
         .on_new_window(move |new_url, _| {
             if is_in_app_url(&new_url) {
                 let app = app_new.clone();

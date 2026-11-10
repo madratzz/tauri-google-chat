@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-10T11:18:44Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29905158: user reported drag-and-drop file attachments not working. Added `disable_drag_drop_handler()` to all webview builders so HTML5 drops reach Google Chat.
+
 ### 2026-11-10T07:43:45Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.3.29904943: user confirmed sign-in works on macOS with 1.2.29904922 and asked why the title bar is white (macOS light appearance vs. Chat dark theme). Added a persisted View → Title Bar setting (system/light/dark) applied with `Window::set_theme`.
