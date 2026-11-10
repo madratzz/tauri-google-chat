@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.29904943 — 2026-11-10T07:43:45Z
+
+Minor release (backward-compatible feature; minor `2` → `3`). UTC-minute identifier `29904943`; Windows MSI version `1.3.456.20527`.
+
+- New: View → Title Bar → Match System / Light / Dark. The native title bar follows the OS appearance and cannot see Google Chat's in-page theme, so users of Chat's dark theme on a light system can now make it dark. The choice is saved in `settings.json`.
+
 ## 1.2.29904922 — 2026-11-10T07:22:32Z
 
 Patch release. UTC-minute identifier `29904922`; Windows MSI version `1.2.456.20506`.

@@ -11,6 +11,7 @@ The app opens `https://chat.google.com/` in a native desktop webview.
 - **Link handling** — Google hosts (`*.google.com`, `*.googleusercontent.com`, sign-in hosts) stay in the app; new-window Google links open in the in-window peek overlay (Esc closes, *Pop Out* opens a separate window). All other links open in your default browser.
 - **Remembers your window** — size, position, monitor and maximized state are restored on launch. Minimum size is 600×400 so the app works in split-screen and on small laptops.
 - **Zoom** — View → Zoom In / Zoom Out / Actual Size (`Ctrl/Cmd` + `=`, `-`, `0`), persisted between launches.
+- **Title bar** — View → Title Bar → Match System / Light / Dark. The native title bar follows macOS/Windows appearance by default and can't see Google Chat's own theme, so pick Dark if you use Chat's dark theme on a light system; persisted.
 - **App icon** — View → App Icon switches between color, dark, and white variants; the choice is persisted.
 - **Offline banner** — shows a Retry banner when the connection drops and reloads automatically when it returns.
 - **Single instance** — launching the app again focuses the existing window.
@@ -19,16 +20,16 @@ Preferences are stored in `settings.json` in the platform app-config directory.
 
 ## Installation
 
-**Latest release: [v1.2.29904922](https://github.com/madratzz/tauri-google-chat/releases/tag/v1.2.29904922)** (2026-11-09) — fixes Google sign-in on macOS. 1.2 added the tray, unread badge and notifications, external-link handling, window-state memory, zoom, an offline banner and smaller, faster release builds. See the [changelog](CHANGELOG.md) for details.
+**Latest release: [v1.3.29904943](https://github.com/madratzz/tauri-google-chat/releases/tag/v1.3.29904943)** (2026-11-10) — adds a Title Bar appearance setting (View → Title Bar) and includes the macOS sign-in fix. 1.2 added the tray, unread badge and notifications, external-link handling, window-state memory, zoom, an offline banner and smaller, faster release builds. See the [changelog](CHANGELOG.md) for details.
 
 | Platform | Download |
 |---|---|
-| Windows (x64) | [`setup.exe`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/Google.Chat.Desktop_1.2.29904922_x64-setup.exe) · [`.msi`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/Google.Chat.Desktop_1.2.29904922_x64_en-US.msi) |
-| macOS (Apple Silicon) | [`.dmg`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/Google.Chat.Desktop_1.2.29904922_aarch64.dmg) |
-| Debian / Ubuntu | [`.deb`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/Google.Chat.Desktop_1.2.29904922_amd64.deb) |
-| Fedora / RPM | [`.rpm`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/Google.Chat.Desktop-1.2.29904922-1.x86_64.rpm) |
-| Arch Linux | [`.pkg.tar.zst`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/google-chat-desktop-1.2.29904922-1-x86_64.pkg.tar.zst) · [`PKGBUILD`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/PKGBUILD) |
-| Any Linux | [`.AppImage`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.2.29904922/Google.Chat.Desktop_1.2.29904922_amd64.AppImage) |
+| Windows (x64) | [`setup.exe`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/Google.Chat.Desktop_1.3.29904943_x64-setup.exe) · [`.msi`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/Google.Chat.Desktop_1.3.29904943_x64_en-US.msi) |
+| macOS (Apple Silicon) | [`.dmg`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/Google.Chat.Desktop_1.3.29904943_aarch64.dmg) |
+| Debian / Ubuntu | [`.deb`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/Google.Chat.Desktop_1.3.29904943_amd64.deb) |
+| Fedora / RPM | [`.rpm`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/Google.Chat.Desktop-1.3.29904943-1.x86_64.rpm) |
+| Arch Linux | [`.pkg.tar.zst`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/google-chat-desktop-1.3.29904943-1-x86_64.pkg.tar.zst) · [`PKGBUILD`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/PKGBUILD) |
+| Any Linux | [`.AppImage`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29904943/Google.Chat.Desktop_1.3.29904943_amd64.AppImage) |
 
 Older versions are on the [Releases page](https://github.com/madratzz/tauri-google-chat/releases).
 

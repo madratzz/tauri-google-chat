@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-10T07:43:45Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29904943: user confirmed sign-in works on macOS with 1.2.29904922 and asked why the title bar is white (macOS light appearance vs. Chat dark theme). Added a persisted View → Title Bar setting (system/light/dark) applied with `Window::set_theme`.
+
 ### 2026-11-10T07:22:32Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.2.29904922: user's `[gcd]` log on an M1 Mac showed signed-out `chat.google.com` lands on `workspace.google.com/products/chat/` and clicking Sign in emits nothing. Main-window `on_page_load` now redirects that landing page to `accounts.google.com/ServiceLogin?service=dynamite&continue=https://chat.google.com/` (rate-limited to once per minute).
