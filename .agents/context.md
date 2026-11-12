@@ -20,6 +20,7 @@ Google Chat Desktop is a Rust/Tauri 2 desktop wrapper for `https://chat.google.c
 - `src-tauri/src/util.rs` holds pure, unit-tested helpers (URL allowlist, titles, unread parsing, peek geometry, zoom).
 - `src-tauri/src/settings.rs` persists icon and zoom preferences to `settings.json` in the app config dir.
 - `.github/workflows/ci.yml` runs fmt/clippy/tests on PRs; `release.yml` builds all platforms (Arch repackaged from the .deb by `.github/scripts/arch-package.sh`) and publishes, from a tag or a manual run.
+- `src-tauri/Entitlements.plist` grants mic/camera under the hardened runtime.
 - `src-tauri/Info.plist` adds macOS camera/microphone usage strings (merged into the bundle).
 - `src-tauri/tauri.conf.json` defines bundle metadata, targets, and icon assets.
 - `.agents/` holds concise active context; `.archive/` holds immutable dated snapshots.
