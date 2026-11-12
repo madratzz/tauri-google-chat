@@ -41,3 +41,5 @@ Detailed May 2026 Tauri, WebView2, icon, and packaging findings were archived du
 - 2026-11-10: wry cancels downloads when no download handler is set; every webview needs `on_download` that assigns an absolute destination.
 
 - 2026-11-12: macOS camera/microphone in the webview need `NSCameraUsageDescription`/`NSMicrophoneUsageDescription` in `src-tauri/Info.plist`; wry already grants WebKit media-capture requests by default.
+
+- 2026-11-12: Tauri signs macOS builds with the hardened runtime even for ad-hoc (`-`) identities; mic/camera also need `com.apple.security.device.audio-input` / `device.camera` in `bundle.macOS.entitlements`, or access is denied with no prompt.

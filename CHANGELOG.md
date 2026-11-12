@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.29907877 — 2026-11-12T08:37:01Z
+
+Patch release. UTC-minute identifier `29907877`; Windows MSI version `1.3.456.23461`.
+
+- Fix (macOS): microphone and camera still unavailable (empty device list, no permission prompt). The app is signed with the hardened runtime, which requires the `com.apple.security.device.audio-input` and `com.apple.security.device.camera` entitlements; they were missing. Added `src-tauri/Entitlements.plist` and `bundle.macOS.entitlements`.
+
 ## 1.3.29907752 — 2026-11-12T06:32:44Z
 
 Patch release. UTC-minute identifier `29907752`; Windows MSI version `1.3.456.23336`.

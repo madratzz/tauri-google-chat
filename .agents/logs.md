@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-12T08:37:01Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29907877: mic still unavailable after 1.3.29907752. Inspected the released `.app`: Info.plist usage strings present, but the binary's CodeDirectory flags are `0x10002` (hardened runtime + ad-hoc) with no entitlements blob. Added `src-tauri/Entitlements.plist` (audio-input, camera) wired via `bundle.macOS.entitlements`.
+
 ### 2026-11-12T06:32:44Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.3.29907752: user reported the Chat recorder spinning. wry grants WKWebView media-capture requests when no permission handler is set, so the block was macOS TCC: added `src-tauri/Info.plist` with camera and microphone usage strings.

@@ -1,7 +1,7 @@
 {
   "name": "tauri-google-chat",
   "private": true,
-  "version": "1.3.29907752",
+  "version": "1.3.29907877",
   "type": "module",
   "scripts": {
     "dev": "tauri dev",
