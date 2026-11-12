@@ -39,3 +39,5 @@ Detailed May 2026 Tauri, WebView2, icon, and packaging findings were archived du
 - 2026-11-10: Tauri's default drag-drop handler swallows OS file drops; remote web apps that accept dropped files need `disable_drag_drop_handler()` on every webview.
 
 - 2026-11-10: wry cancels downloads when no download handler is set; every webview needs `on_download` that assigns an absolute destination.
+
+- 2026-11-12: macOS camera/microphone in the webview need `NSCameraUsageDescription`/`NSMicrophoneUsageDescription` in `src-tauri/Info.plist`; wry already grants WebKit media-capture requests by default.
