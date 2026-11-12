@@ -1,6 +1,6 @@
 [package]
 name = "google-chat-desktop"
-version = "1.3.29905200"
+version = "1.3.29907752"
 description = "A Tauri desktop wrapper for Google Chat"
 authors = ["madratzz"]
 edition = "2021"

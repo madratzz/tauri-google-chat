@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-12T06:32:44Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29907752: user reported the Chat recorder spinning. wry grants WKWebView media-capture requests when no permission handler is set, so the block was macOS TCC: added `src-tauri/Info.plist` with camera and microphone usage strings.
+
 ### 2026-11-10T12:00:43Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.3.29905200: user reported Download in the file viewer hangs. wry cancels downloads when no handler is registered (`wkwebview/navigation.rs`). Added `on_download` on all webviews: save to `download_dir()` via `util::download_file_name` + `util::unique_path` (tested), notify on finish.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.29907752 — 2026-11-12T06:32:44Z
+
+Patch release. UTC-minute identifier `29907752`; Windows MSI version `1.3.456.23336`.
+
+- Fix (macOS): voice/video message recording and calls spun forever. The app bundle had no `NSCameraUsageDescription` / `NSMicrophoneUsageDescription`, so macOS silently blocked camera and microphone access. Added `src-tauri/Info.plist` (merged into the bundle by Tauri); macOS now asks for permission on first use.
+
 ## 1.3.29905200 — 2026-11-10T12:00:43Z
 
 Patch release. UTC-minute identifier `29905200`; Windows MSI version `1.3.456.20784`.
