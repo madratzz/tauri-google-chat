@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-16T18:38:00Z — claude/affectionate-rubin-2noqud
+
+Release 1.4.29914238 (UTC-minute `Z=29914238`; `Y` bumped for the backward-compatible default-icon feature). Merged `origin/main` (1.3.29913701 peek fix) into `feature/release-1-4-29914238` off `development`; only `.agents/logs.md` conflicted and both entries were kept. WiX version `1.4.456.29822` = `floor(Z/65536).(Z%65536)`. Moved two icon bullets out of the 1.3.29913701 changelog section, since they were merged in as unreleased content. README download links now point to the 1.4.29914238 assets.
+
 ### 2026-11-16T10:50:00Z — claude/affectionate-rubin-2noqud
 
 Dock/taskbar icon was oversized and used the stale pre-2026 glyph. Regenerated the in-app PNGs from `google-chat-2026-square.svg` with padding (1024px, glyph about 85% of the canvas). Added `google-chat-bar-dark.png` and `google-chat-bar-white.png` (full colour, monochrome top bar) as the new "Match System" default. Bundle launcher icons (`icon.icns`, `icon.ico`, `*.png`) are unchanged.
