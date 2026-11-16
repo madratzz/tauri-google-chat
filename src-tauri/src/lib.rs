@@ -21,8 +21,8 @@ use tauri_plugin_window_state::StateFlags;
 
 use settings::{Settings, SettingsState};
 use util::{
-    clamp_zoom, is_blank_url, is_in_app_url, is_openable_externally, is_sign_in_url, is_signed_out_landing,
-    title_for_url, unread_from_title,
+    clamp_zoom, is_blank_url, is_in_app_url, is_openable_externally, is_sign_in_url,
+    is_signed_out_landing, title_for_url, unread_from_title,
 };
 
 const CHAT_URL: &str = "https://chat.google.com/";
