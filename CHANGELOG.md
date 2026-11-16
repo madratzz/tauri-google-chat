@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.29913701 — 2026-11-16T09:41:41Z
+
+Patch release. UTC-minute identifier `29913701`; Windows MSI version `1.3.456.29285`.
+
+- Fix: opening some attachments ("Open in new tab") showed a blank white overlay that could not be closed. Script-driven `about:blank` popups are now ignored instead of opened as an empty peek; a peek whose link turns into a download closes itself; the peek's Close toolbar is re-injected on every page load; and Escape or a click anywhere on the main window now always closes an open peek.
+
 ## 1.3.29907877 — 2026-11-12T08:37:01Z
 
 Patch release. UTC-minute identifier `29907877`; Windows MSI version `1.3.456.23461`.

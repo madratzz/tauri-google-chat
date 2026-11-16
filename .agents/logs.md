@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-16T09:41:41Z — claude/session_01CWCdnDmCHpswR2bUkQZH9o
+
+Release 1.3.29913701: user reported "Open in new tab" on a `.md` attachment opened a blank peek with no way to close it. Peek close previously relied solely on the injected toolbar/Escape inside the peek page. Added `util::is_blank_url` (ignore `about:` popups), close-on-download in peek, toolbar re-eval on page load, and a main-window `MAIN_PEEK_CLOSE_JS` + `on_navigation` sentinel so Escape/click outside closes the peek.
+
 ### 2026-11-12T08:37:01Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.3.29907877: mic still unavailable after 1.3.29907752. Inspected the released `.app`: Info.plist usage strings present, but the binary's CodeDirectory flags are `0x10002` (hardened runtime + ad-hoc) with no entitlements blob. Added `src-tauri/Entitlements.plist` (audio-input, camera) wired via `bundle.macOS.entitlements`.
