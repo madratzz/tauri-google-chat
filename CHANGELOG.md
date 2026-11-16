@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Change: the app icon now follows the system theme by default: white on dark, black on light. The taskbar/window icon, the macOS Dock icon, and the tray icon all use it, and update when the theme changes. The tray icon was previously always the color artwork. View → App Icon adds a "Match System" option; Color, Dark, and White are unchanged. A saved explicit choice is kept.
+- Change: the default "Match System" icon uses the 2026 Google Chat artwork in full colour, with only its top bar black (light theme) or white (dark theme). Dark and White are regenerated from the 2026 artwork with Dock-sized padding, so they are no longer oversized.
 
 ## 1.3.29907877 — 2026-11-12T08:37:01Z
 

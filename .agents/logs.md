@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-16T10:50:00Z — claude/affectionate-rubin-2noqud
+
+Dock/taskbar icon was oversized and used the stale pre-2026 glyph. Regenerated the in-app PNGs from `google-chat-2026-square.svg` with padding (1024px, glyph about 85% of the canvas). Added `google-chat-bar-dark.png` and `google-chat-bar-white.png` (full colour, monochrome top bar) as the new "Match System" default. Bundle launcher icons (`icon.icns`, `icon.ico`, `*.png`) are unchanged.
+
 ### 2026-11-16T09:42:48Z — claude/affectionate-rubin-2noqud
 
 Taskbar, Dock, and tray icon now default to a monochrome variant that follows the window theme (white on dark, black on light). Added `icon: "system"` as the new default (`settings.rs`), `icon_bytes` and theme-aware `apply_icon` in `lib.rs`, a tray icon built from the same choice (macOS uses a template image), and a `ThemeChanged` refresh. Explicit Color/Dark/White choices are kept. Unversioned; CHANGELOG has an Unreleased entry. Verified with `cargo fmt` and `cargo check` on Linux; the macOS-only template calls were checked against the Tauri 2.12.5 source but not compiled on macOS. Not yet checked on real hardware.

@@ -35,6 +35,10 @@ const SAFARI_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
 const COLOR_ICON: &[u8] = include_bytes!("../icons/google-chat-color.png");
 const DARK_ICON: &[u8] = include_bytes!("../icons/google-chat-dark.png");
 const WHITE_ICON: &[u8] = include_bytes!("../icons/google-chat-white.png");
+/// Full-colour mark with a black top bar, for light system themes.
+const BAR_DARK_ICON: &[u8] = include_bytes!("../icons/google-chat-bar-dark.png");
+/// Full-colour mark with a white top bar, for dark system themes.
+const BAR_WHITE_ICON: &[u8] = include_bytes!("../icons/google-chat-bar-white.png");
 const PEEK_ACTION_HOST: &str = "peek-action.tauri.internal";
 
 static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
@@ -763,16 +767,17 @@ fn current_theme(app: &AppHandle) -> Option<Theme> {
     app.get_webview_window("main").and_then(|w| w.theme().ok())
 }
 
-/// Chooses the icon bytes for a setting. "system" (the default) uses white on
-/// dark themes and black on light or unknown themes.
+/// Chooses the icon bytes for a setting. "system" (the default) keeps the
+/// colour mark and makes only its top bar white on dark themes and black on
+/// light or unknown themes.
 fn icon_bytes(icon: &str, theme: Option<Theme>) -> &'static [u8] {
     match icon {
         "color" => COLOR_ICON,
         "dark" => DARK_ICON,
         "white" => WHITE_ICON,
         _ => match theme {
-            Some(Theme::Dark) => WHITE_ICON,
-            _ => DARK_ICON,
+            Some(Theme::Dark) => BAR_WHITE_ICON,
+            _ => BAR_DARK_ICON,
         },
     }
 }
