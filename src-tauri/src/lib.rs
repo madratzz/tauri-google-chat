@@ -12,7 +12,7 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, WebviewBuilder},
-    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, WebviewUrl,
+    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Theme, Url, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_notification::NotificationExt;
@@ -21,7 +21,7 @@ use tauri_plugin_window_state::StateFlags;
 
 use settings::{Settings, SettingsState};
 use util::{
-    clamp_zoom, is_in_app_url, is_openable_externally, is_sign_in_url, is_signed_out_landing,
+    clamp_zoom, is_blank_url, is_in_app_url, is_openable_externally, is_sign_in_url, is_signed_out_landing,
     title_for_url, unread_from_title,
 };
 
@@ -55,7 +55,8 @@ struct PeekUrl(Mutex<Option<Url>>);
 /// intercepts on the Rust side.
 const PEEK_TOOLBAR_JS: &str = r#"
 (function() {
-    if (window.top !== window) return;
+    if (window.top !== window || window.__gcdPeekToolbar) return;
+    window.__gcdPeekToolbar = true;
     function inject() {
         if (document.getElementById('_peek_toolbar') || !document.body) return;
         var bar = document.createElement('div');
@@ -80,6 +81,24 @@ const PEEK_TOOLBAR_JS: &str = r#"
     });
     document.addEventListener('DOMContentLoaded', inject);
     window.addEventListener('load', inject);
+    inject();
+})();
+"#;
+
+/// Main-window script: while a peek overlay is open (Rust sets
+/// `__gcdPeekOpen`), Escape or a click on the visible main window closes it,
+/// so a blank or broken peek page can never trap the user.
+const MAIN_PEEK_CLOSE_JS: &str = r#"
+(function() {
+    if (window.top !== window) return;
+    function close(e) {
+        if (!window.__gcdPeekOpen) return;
+        window.__gcdPeekOpen = false;
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        window.location.href = 'https://peek-action.tauri.internal/close';
+    }
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(e); }, true);
+    document.addEventListener('mousedown', close, true);
 })();
 "#;
 
@@ -146,10 +165,26 @@ pub fn run() {
             .disable_drag_drop_handler()
             .on_download(|webview, event| handle_download(webview.app_handle(), event))
             .initialization_script(OFFLINE_JS)
+            .initialization_script(MAIN_PEEK_CLOSE_JS)
+            .on_navigation({
+                let app = handle.clone();
+                move |nav_url| {
+                    if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move { close_peek(&app) });
+                        return false;
+                    }
+                    true
+                }
+            })
             .on_new_window(move |url, _| {
                 eprintln!("[gcd] new window requested: {url}");
                 let app = app_new_window.clone();
-                if is_sign_in_url(&url) {
+                if is_blank_url(&url) {
+                    // Script-driven popups (window.open() then write/redirect) can't
+                    // be followed once denied; a peek of them is just a blank page.
+                    eprintln!("[gcd] ignored blank popup");
+                } else if is_sign_in_url(&url) {
                     // Sign-in must run in the main window, not the peek overlay.
                     tauri::async_runtime::spawn(async move { navigate_main(&app, url) });
                 } else if is_in_app_url(&url) {
@@ -194,6 +229,9 @@ pub fn run() {
                 WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                     schedule_peek_reposition(&app_events)
                 }
+                WindowEvent::ThemeChanged(theme) => {
+                    apply_icon(&app_events, &settings::get(&app_events), Some(*theme))
+                }
                 WindowEvent::CloseRequested { api, .. } if TRAY_READY.load(Ordering::Relaxed) => {
                     api.prevent_close();
                     if let Some(w) = app_events.get_webview_window("main") {
@@ -204,11 +242,11 @@ pub fn run() {
             });
 
             app.set_menu(build_menu(&handle)?)?;
-            match build_tray(&handle) {
+            match build_tray(&handle, &prefs) {
                 Ok(()) => TRAY_READY.store(true, Ordering::Relaxed),
                 Err(e) => eprintln!("tray unavailable, closing the window will quit: {e}"),
             }
-            apply_icon(&handle, &prefs);
+            apply_icon(&handle, &prefs, current_theme(&handle));
             apply_title_bar(&handle, &prefs);
             Ok(())
         })
@@ -246,6 +284,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         "App Icon",
         true,
         &[
+            &MenuItem::with_id(app, "icon-system", "Match System", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-color", "Color", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-dark", "Dark", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-white", "White", true, None::<&str>)?,
@@ -330,7 +369,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Menu::with_items(app, &[&app_menu, &edit_menu, &view_menu, &window_menu])
 }
 
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+fn build_tray(app: &AppHandle, prefs: &Settings) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
@@ -353,8 +392,20 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 toggle_main(tray.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
+    let bytes = icon_bytes(&prefs.icon, current_theme(app));
+    match Image::from_bytes(bytes) {
+        Ok(icon) => builder = builder.icon(icon),
+        Err(_) => {
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
+            }
+        }
+    }
+    // macOS template images are tinted by the menu bar, so the monochrome
+    // variants render black or white automatically. Color stays as-is.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.icon_as_template(prefs.icon != "color");
     }
     builder.build(app)?;
     Ok(())
@@ -390,9 +441,9 @@ fn handle_menu(app: &AppHandle, id: &str) {
                 let _ = w.set_zoom(s.zoom);
             }
         }
-        "icon-color" | "icon-dark" | "icon-white" => {
+        "icon-system" | "icon-color" | "icon-dark" | "icon-white" => {
             let s = settings::update(app, |s| s.icon = id.trim_start_matches("icon-").into());
-            apply_icon(app, &s);
+            apply_icon(app, &s, current_theme(app));
         }
         "titlebar-system" | "titlebar-light" | "titlebar-dark" => {
             let s = settings::update(app, |s| {
@@ -580,8 +631,22 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
         .user_agent(SAFARI_USER_AGENT)
         // Let file drops reach the page (Chat attachments) instead of Tauri.
         .disable_drag_drop_handler()
-        .on_download(|webview, event| handle_download(webview.app_handle(), event))
+        .on_download(|webview, event| {
+            // A link that turns out to be a download leaves the peek blank.
+            if matches!(event, DownloadEvent::Requested { .. }) {
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn(async move { close_peek(&app) });
+            }
+            handle_download(webview.app_handle(), event)
+        })
         .initialization_script(PEEK_TOOLBAR_JS)
+        .on_page_load(|webview, payload| {
+            // Init scripts don't always run (e.g. about:blank, error pages);
+            // re-inject so Close is always reachable.
+            if matches!(payload.event(), PageLoadEvent::Finished) {
+                let _ = webview.eval(PEEK_TOOLBAR_JS);
+            }
+        })
         .on_navigation(move |nav_url| {
             if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
                 // On Windows/WebView2 this runs on a background thread and window
@@ -601,7 +666,9 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
             true
         })
         .on_new_window(move |url, _| {
-            if is_in_app_url(&url) {
+            if is_blank_url(&url) {
+                eprintln!("[gcd] ignored blank popup");
+            } else if is_in_app_url(&url) {
                 let app = app_for_new.clone();
                 tauri::async_runtime::spawn(async move { open_child_window(&app, url) });
             } else {
@@ -610,8 +677,16 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
             NewWindowResponse::Deny
         });
 
-    if let Err(e) = main_window.add_child(builder, pos, size) {
-        eprintln!("failed to create peek overlay: {e}");
+    match main_window.add_child(builder, pos, size) {
+        Ok(_) => set_main_peek_flag(app, true),
+        Err(e) => eprintln!("failed to create peek overlay: {e}"),
+    }
+}
+
+/// Tells the main page whether a peek is open (see `MAIN_PEEK_CLOSE_JS`).
+fn set_main_peek_flag(app: &AppHandle, open: bool) {
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.eval(format!("window.__gcdPeekOpen = {open};"));
     }
 }
 
@@ -628,6 +703,7 @@ fn expand_peek(app: &AppHandle) {
         .ok()
         .and_then(|mut g| g.take());
     let _ = peek.close();
+    set_main_peek_flag(app, false);
     if let Some(url) = url {
         open_child_window(app, url);
     }
@@ -653,7 +729,9 @@ fn open_child_window(app: &AppHandle, url: Url) {
         .disable_drag_drop_handler()
         .on_download(|webview, event| handle_download(webview.app_handle(), event))
         .on_new_window(move |new_url, _| {
-            if is_in_app_url(&new_url) {
+            if is_blank_url(&new_url) {
+                eprintln!("[gcd] ignored blank popup");
+            } else if is_in_app_url(&new_url) {
                 let app = app_new.clone();
                 tauri::async_runtime::spawn(async move { open_child_window(&app, new_url) });
             } else {
@@ -688,6 +766,7 @@ fn close_peek(app: &AppHandle) {
     if let Some(peek) = app.get_webview("peek") {
         let _ = peek.close();
     }
+    set_main_peek_flag(app, false);
 }
 
 /// Debounced: a resize drag fires many events; only reposition once it settles.
@@ -742,12 +821,28 @@ fn apply_title_bar(app: &AppHandle, prefs: &Settings) {
     }
 }
 
-fn apply_icon(app: &AppHandle, prefs: &Settings) {
-    let bytes = match prefs.icon.as_str() {
+/// The window's current appearance, used to pick a monochrome icon.
+fn current_theme(app: &AppHandle) -> Option<Theme> {
+    app.get_webview_window("main").and_then(|w| w.theme().ok())
+}
+
+/// Chooses the icon bytes for a setting. "system" (the default) uses white on
+/// dark themes and black on light or unknown themes.
+fn icon_bytes(icon: &str, theme: Option<Theme>) -> &'static [u8] {
+    match icon {
+        "color" => COLOR_ICON,
         "dark" => DARK_ICON,
         "white" => WHITE_ICON,
-        _ => COLOR_ICON,
-    };
+        _ => match theme {
+            Some(Theme::Dark) => WHITE_ICON,
+            _ => DARK_ICON,
+        },
+    }
+}
+
+/// Applies the icon to the window (taskbar), the macOS Dock, and the tray.
+fn apply_icon(app: &AppHandle, prefs: &Settings, theme: Option<Theme>) {
+    let bytes = icon_bytes(&prefs.icon, theme);
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -756,6 +851,14 @@ fn apply_icon(app: &AppHandle, prefs: &Settings) {
     }
     #[cfg(target_os = "macos")]
     set_macos_dock_icon(bytes);
+
+    if let Some(tray) = app.tray_by_id("main") {
+        if let Ok(icon) = Image::from_bytes(bytes) {
+            let _ = tray.set_icon(Some(icon));
+        }
+        #[cfg(target_os = "macos")]
+        let _ = tray.set_icon_as_template(prefs.icon != "color");
+    }
 }
 
 #[cfg(target_os = "macos")]

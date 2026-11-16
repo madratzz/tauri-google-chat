@@ -119,6 +119,13 @@ pub fn unique_path(dir: &Path, name: &str, exists: impl Fn(&Path) -> bool) -> Pa
         .expect("unbounded range")
 }
 
+/// A popup with no real destination (`about:blank`, `about:srcdoc`): pages
+/// open these with `window.open()` and fill them by script, which a denied
+/// new-window request can't follow.
+pub fn is_blank_url(url: &Url) -> bool {
+    url.scheme() == "about"
+}
+
 /// Whether an out-of-app URL is safe to hand to the OS opener.
 pub fn is_openable_externally(url: &Url) -> bool {
     matches!(url.scheme(), "http" | "https" | "mailto" | "tel")
@@ -183,6 +190,13 @@ mod tests {
 
     fn u(s: &str) -> Url {
         s.parse().unwrap()
+    }
+
+    #[test]
+    fn blank_popups() {
+        assert!(is_blank_url(&u("about:blank")));
+        assert!(is_blank_url(&u("about:srcdoc")));
+        assert!(!is_blank_url(&u("https://chat.google.com/")));
     }
 
     #[test]
