@@ -9,6 +9,7 @@ use crate::util::clamp_zoom;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Settings {
+    /// "system" (black or white by theme), "color", "dark" or "white".
     pub icon: String,
     pub zoom: f64,
     /// "system", "light" or "dark".
@@ -18,7 +19,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            icon: "color".into(),
+            icon: "system".into(),
             zoom: 1.0,
             title_bar: "system".into(),
         }
@@ -34,6 +35,14 @@ fn path(app: &AppHandle) -> Option<PathBuf> {
         .map(|d| d.join("settings.json"))
 }
 
+/// Returns a copy of the current settings without touching the disk.
+pub fn get(app: &AppHandle) -> Settings {
+    match app.state::<SettingsState>().0.lock() {
+        Ok(s) => s.clone(),
+        Err(_) => Settings::default(),
+    }
+}
+
 pub fn load(app: &AppHandle) -> Settings {
     let mut s = Settings::default();
     let Some(v) = path(app)
@@ -43,7 +52,7 @@ pub fn load(app: &AppHandle) -> Settings {
         return s;
     };
     if let Some(icon) = v.get("icon").and_then(Value::as_str) {
-        if matches!(icon, "color" | "dark" | "white") {
+        if matches!(icon, "system" | "color" | "dark" | "white") {
             s.icon = icon.into();
         }
     }

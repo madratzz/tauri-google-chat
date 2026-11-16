@@ -12,7 +12,7 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, WebviewBuilder},
-    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Url, WebviewUrl,
+    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Theme, Url, WebviewUrl,
     WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_notification::NotificationExt;
@@ -194,6 +194,9 @@ pub fn run() {
                 WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
                     schedule_peek_reposition(&app_events)
                 }
+                WindowEvent::ThemeChanged(theme) => {
+                    apply_icon(&app_events, &settings::get(&app_events), Some(*theme))
+                }
                 WindowEvent::CloseRequested { api, .. } if TRAY_READY.load(Ordering::Relaxed) => {
                     api.prevent_close();
                     if let Some(w) = app_events.get_webview_window("main") {
@@ -204,11 +207,11 @@ pub fn run() {
             });
 
             app.set_menu(build_menu(&handle)?)?;
-            match build_tray(&handle) {
+            match build_tray(&handle, &prefs) {
                 Ok(()) => TRAY_READY.store(true, Ordering::Relaxed),
                 Err(e) => eprintln!("tray unavailable, closing the window will quit: {e}"),
             }
-            apply_icon(&handle, &prefs);
+            apply_icon(&handle, &prefs, current_theme(&handle));
             apply_title_bar(&handle, &prefs);
             Ok(())
         })
@@ -246,6 +249,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         "App Icon",
         true,
         &[
+            &MenuItem::with_id(app, "icon-system", "Match System", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-color", "Color", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-dark", "Dark", true, None::<&str>)?,
             &MenuItem::with_id(app, "icon-white", "White", true, None::<&str>)?,
@@ -330,7 +334,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Menu::with_items(app, &[&app_menu, &edit_menu, &view_menu, &window_menu])
 }
 
-fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+fn build_tray(app: &AppHandle, prefs: &Settings) -> tauri::Result<()> {
     let menu = Menu::with_items(
         app,
         &[
@@ -353,8 +357,20 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 toggle_main(tray.app_handle());
             }
         });
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
+    let bytes = icon_bytes(&prefs.icon, current_theme(app));
+    match Image::from_bytes(bytes) {
+        Ok(icon) => builder = builder.icon(icon),
+        Err(_) => {
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
+            }
+        }
+    }
+    // macOS template images are tinted by the menu bar, so the monochrome
+    // variants render black or white automatically. Color stays as-is.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.icon_as_template(prefs.icon != "color");
     }
     builder.build(app)?;
     Ok(())
@@ -390,9 +406,9 @@ fn handle_menu(app: &AppHandle, id: &str) {
                 let _ = w.set_zoom(s.zoom);
             }
         }
-        "icon-color" | "icon-dark" | "icon-white" => {
+        "icon-system" | "icon-color" | "icon-dark" | "icon-white" => {
             let s = settings::update(app, |s| s.icon = id.trim_start_matches("icon-").into());
-            apply_icon(app, &s);
+            apply_icon(app, &s, current_theme(app));
         }
         "titlebar-system" | "titlebar-light" | "titlebar-dark" => {
             let s = settings::update(app, |s| {
@@ -742,12 +758,28 @@ fn apply_title_bar(app: &AppHandle, prefs: &Settings) {
     }
 }
 
-fn apply_icon(app: &AppHandle, prefs: &Settings) {
-    let bytes = match prefs.icon.as_str() {
+/// The window's current appearance, used to pick a monochrome icon.
+fn current_theme(app: &AppHandle) -> Option<Theme> {
+    app.get_webview_window("main").and_then(|w| w.theme().ok())
+}
+
+/// Chooses the icon bytes for a setting. "system" (the default) uses white on
+/// dark themes and black on light or unknown themes.
+fn icon_bytes(icon: &str, theme: Option<Theme>) -> &'static [u8] {
+    match icon {
+        "color" => COLOR_ICON,
         "dark" => DARK_ICON,
         "white" => WHITE_ICON,
-        _ => COLOR_ICON,
-    };
+        _ => match theme {
+            Some(Theme::Dark) => WHITE_ICON,
+            _ => DARK_ICON,
+        },
+    }
+}
+
+/// Applies the icon to the window (taskbar), the macOS Dock, and the tray.
+fn apply_icon(app: &AppHandle, prefs: &Settings, theme: Option<Theme>) {
+    let bytes = icon_bytes(&prefs.icon, theme);
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
@@ -756,6 +788,14 @@ fn apply_icon(app: &AppHandle, prefs: &Settings) {
     }
     #[cfg(target_os = "macos")]
     set_macos_dock_icon(bytes);
+
+    if let Some(tray) = app.tray_by_id("main") {
+        if let Ok(icon) = Image::from_bytes(bytes) {
+            let _ = tray.set_icon(Some(icon));
+        }
+        #[cfg(target_os = "macos")]
+        let _ = tray.set_icon_as_template(prefs.icon != "color");
+    }
 }
 
 #[cfg(target_os = "macos")]

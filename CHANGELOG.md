@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Change: the app icon now follows the system theme by default: white on dark, black on light. The taskbar/window icon, the macOS Dock icon, and the tray icon all use it, and update when the theme changes. The tray icon was previously always the color artwork. View → App Icon adds a "Match System" option; Color, Dark, and White are unchanged. A saved explicit choice is kept.
+
 ## 1.3.29907877 — 2026-11-12T08:37:01Z
 
 Patch release. UTC-minute identifier `29907877`; Windows MSI version `1.3.456.23461`.

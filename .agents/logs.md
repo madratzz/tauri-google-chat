@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-16T09:42:48Z — claude/affectionate-rubin-2noqud
+
+Taskbar, Dock, and tray icon now default to a monochrome variant that follows the window theme (white on dark, black on light). Added `icon: "system"` as the new default (`settings.rs`), `icon_bytes` and theme-aware `apply_icon` in `lib.rs`, a tray icon built from the same choice (macOS uses a template image), and a `ThemeChanged` refresh. Explicit Color/Dark/White choices are kept. Unversioned; CHANGELOG has an Unreleased entry. Verified with `cargo fmt` and `cargo check` on Linux; the macOS-only template calls were checked against the Tauri 2.12.5 source but not compiled on macOS. Not yet checked on real hardware.
+
 ### 2026-11-12T08:37:01Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 
 Release 1.3.29907877: mic still unavailable after 1.3.29907752. Inspected the released `.app`: Info.plist usage strings present, but the binary's CodeDirectory flags are `0x10002` (hardened runtime + ad-hoc) with no entitlements blob. Added `src-tauri/Entitlements.plist` (audio-input, camera) wired via `bundle.macOS.entitlements`.
