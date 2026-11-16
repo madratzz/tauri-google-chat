@@ -1,8 +1,68 @@
 # Active Logs
 
-Last updated: 2026-09-14
+Last updated: 2026-11-09
 
 ## Current Session
+
+### 2026-11-16T09:42:48Z — claude/affectionate-rubin-2noqud
+
+Taskbar, Dock, and tray icon now default to a monochrome variant that follows the window theme (white on dark, black on light). Added `icon: "system"` as the new default (`settings.rs`), `icon_bytes` and theme-aware `apply_icon` in `lib.rs`, a tray icon built from the same choice (macOS uses a template image), and a `ThemeChanged` refresh. Explicit Color/Dark/White choices are kept. Unversioned; CHANGELOG has an Unreleased entry. Verified with `cargo fmt` and `cargo check` on Linux; the macOS-only template calls were checked against the Tauri 2.12.5 source but not compiled on macOS. Not yet checked on real hardware.
+
+### 2026-11-12T08:37:01Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29907877: mic still unavailable after 1.3.29907752. Inspected the released `.app`: Info.plist usage strings present, but the binary's CodeDirectory flags are `0x10002` (hardened runtime + ad-hoc) with no entitlements blob. Added `src-tauri/Entitlements.plist` (audio-input, camera) wired via `bundle.macOS.entitlements`.
+
+### 2026-11-12T06:32:44Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29907752: user reported the Chat recorder spinning. wry grants WKWebView media-capture requests when no permission handler is set, so the block was macOS TCC: added `src-tauri/Info.plist` with camera and microphone usage strings.
+
+### 2026-11-10T12:00:43Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29905200: user reported Download in the file viewer hangs. wry cancels downloads when no handler is registered (`wkwebview/navigation.rs`). Added `on_download` on all webviews: save to `download_dir()` via `util::download_file_name` + `util::unique_path` (tested), notify on finish.
+
+### 2026-11-10T11:18:44Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29905158: user reported drag-and-drop file attachments not working. Added `disable_drag_drop_handler()` to all webview builders so HTML5 drops reach Google Chat.
+
+### 2026-11-10T07:43:45Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.3.29904943: user confirmed sign-in works on macOS with 1.2.29904922 and asked why the title bar is white (macOS light appearance vs. Chat dark theme). Added a persisted View → Title Bar setting (system/light/dark) applied with `Window::set_theme`.
+
+### 2026-11-10T07:22:32Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.2.29904922: user's `[gcd]` log on an M1 Mac showed signed-out `chat.google.com` lands on `workspace.google.com/products/chat/` and clicking Sign in emits nothing. Main-window `on_page_load` now redirects that landing page to `accounts.google.com/ServiceLogin?service=dynamite&continue=https://chat.google.com/` (rate-limited to once per minute).
+
+### 2026-11-09T22:13:05Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.2.29904373: user reported sign-in still does nothing on an M1 Mac after 1.2.29904303. Sign-in URLs from `on_new_window` now navigate the main window; peek creation is deferred out of the callback; added stderr logging and the Tauri `devtools` feature for diagnosis. Root cause not yet confirmed on hardware.
+
+### 2026-11-09T21:45:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Reworked Arch packaging in `release.yml` after repeated failures (container job not starting, tag-only upload steps, PKGBUILD needing a published tag tarball, `arch-release.yml` 403 on published releases). The Linux job now repackages its `.deb` into `.pkg.tar.zst` plus a binary PKGBUILD via `.github/scripts/arch-package.sh` and uploads by release id; a final `publish-release` job publishes the draft when all platforms succeed. Removed `arch-release.yml`. Script tested locally with a synthetic .deb.
+
+### 2026-11-09T21:03:24Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Release 1.2.29904303: fixed macOS sign-in. wry's WKWebView navigation handler fires for all frames and `javascript:` URLs (no main-frame filter, see wry `wkwebview/navigation.rs`), so the 1.2 `on_navigation` allowlist cancelled Google sign-in. Removed `on_navigation` filtering from all webviews (peek keeps only its sentinel handling); link policy now lives in `on_new_window`. Added Google country-domain matching with tests.
+
+### 2026-11-09T19:15:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+README: added the v1.2.29902849 release summary with direct download links per platform, and a Releasing section covering tag-triggered and manual (`arch-release.yml`) flows.
+
+### 2026-11-09T18:35:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Fixed `release.yml`: the draft-release step passed the GraphQL node id (`gh release view --json id`) as `releaseId`, so once `tagName` was removed in 1.2 `tauri-action` skipped every upload and v1.2.29902849 was published with no assets. The step now looks up the numeric REST id and reuses an existing release, so the workflow can be re-run to attach assets.
+
+### 2026-11-09T12:30:00Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Added `.github/workflows/arch-release.yml`, a manual workflow that builds the Arch package from a ref, publishes the matching draft release (creating its tag), and uploads the `.pkg.tar.zst` plus a checksummed PKGBUILD. Needed because v1.2.29902849 was released via `workflow_dispatch` (tag pushes are blocked from the agent environment), which skips the tag-only Arch upload steps in `release.yml`. Documentation review: README release steps unchanged; this log is the record.
+
+### 2026-11-08T20:49:24Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
+
+Implemented the review/improvement plan (speed, security, responsive UI, UX, CI) as version `1.2.29902849`. Work was done on the session-designated branch `claude/jolly-dijkstra-mea4sv` because no `development` branch exists.
+
+Files touched: `src-tauri/src/{lib,util,settings}.rs`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, `src-tauri/tauri.conf.json`, `package.json`, `package-lock.json`, `PKGBUILD`, `.github/workflows/{ci,release}.yml`, `README.md`, `CHANGELOG.md`, `.agents/context.md`, `.agents/logs.md`.
+
+Verification: `cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test` (5 tests), and `cargo build --release` on Linux. Not run on macOS/Windows or against a live Google account.
 
 ### 2026-09-14T15:45:22+05:00 — codex/root
 

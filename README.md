@@ -2,13 +2,37 @@
 
 A small Rust/Tauri desktop wrapper for Google Chat.
 
-The app opens `https://chat.google.com/` in a native desktop webview and adds a simple native menu with reload, back, forward, and quit actions.
+The app opens `https://chat.google.com/` in a native desktop webview.
 
-The Icon menu can switch the active window icon between the color, dark, and white Google Chat variants.
+## Features
+
+- **Tray and background mode** — closing the window hides it to the system tray; click the tray icon to toggle it, or use the tray menu to quit. If no tray is available (some Linux desktops), closing quits as before.
+- **Unread badge and notifications** — the unread count from the page title drives the dock/taskbar badge and tray tooltip, and a native notification is shown when it rises while the window is unfocused.
+- **Link handling** — Google hosts (`*.google.com`, `*.googleusercontent.com`, sign-in hosts) stay in the app; new-window Google links open in the in-window peek overlay (Esc closes, *Pop Out* opens a separate window). All other links open in your default browser.
+- **Remembers your window** — size, position, monitor and maximized state are restored on launch. Minimum size is 600×400 so the app works in split-screen and on small laptops.
+- **Zoom** — View → Zoom In / Zoom Out / Actual Size (`Ctrl/Cmd` + `=`, `-`, `0`), persisted between launches.
+- **Title bar** — View → Title Bar → Match System / Light / Dark. The native title bar follows macOS/Windows appearance by default and can't see Google Chat's own theme, so pick Dark if you use Chat's dark theme on a light system; persisted.
+- **App icon** — by default the taskbar, Dock, and tray icon are white on a dark system theme and black on a light one, and update when the theme changes. View → App Icon can choose Match System (default), Color, Dark, or White; the choice is persisted.
+- **Downloads** — files you download from Chat are saved to your Downloads folder (never overwriting: `name (2).ext`), with a notification when done.
+- **Offline banner** — shows a Retry banner when the connection drops and reloads automatically when it returns.
+- **Single instance** — launching the app again focuses the existing window.
+
+Preferences are stored in `settings.json` in the platform app-config directory.
 
 ## Installation
 
-Download the latest release from the [Releases page](https://github.com/madratzz/tauri-google-chat/releases/latest).
+**Latest release: [v1.3.29907877](https://github.com/madratzz/tauri-google-chat/releases/tag/v1.3.29907877)** (2026-11-10) — adds a Title Bar appearance setting (View → Title Bar) and includes the macOS sign-in fix. 1.2 added the tray, unread badge and notifications, external-link handling, window-state memory, zoom, an offline banner and smaller, faster release builds. See the [changelog](CHANGELOG.md) for details.
+
+| Platform | Download |
+|---|---|
+| Windows (x64) | [`setup.exe`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/Google.Chat.Desktop_1.3.29907877_x64-setup.exe) · [`.msi`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/Google.Chat.Desktop_1.3.29907877_x64_en-US.msi) |
+| macOS (Apple Silicon) | [`.dmg`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/Google.Chat.Desktop_1.3.29907877_aarch64.dmg) |
+| Debian / Ubuntu | [`.deb`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/Google.Chat.Desktop_1.3.29907877_amd64.deb) |
+| Fedora / RPM | [`.rpm`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/Google.Chat.Desktop-1.3.29907877-1.x86_64.rpm) |
+| Arch Linux | [`.pkg.tar.zst`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/google-chat-desktop-1.3.29907877-1-x86_64.pkg.tar.zst) · [`PKGBUILD`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/PKGBUILD) |
+| Any Linux | [`.AppImage`](https://github.com/madratzz/tauri-google-chat/releases/download/v1.3.29907877/Google.Chat.Desktop_1.3.29907877_amd64.AppImage) |
+
+Older versions are on the [Releases page](https://github.com/madratzz/tauri-google-chat/releases).
 
 ### Windows
 
@@ -26,7 +50,7 @@ Open the `.dmg`, drag the app to Applications, then right-click → Open the fir
 # Install the pre-built package directly
 sudo pacman -U google-chat-desktop-*-x86_64.pkg.tar.zst
 
-# Or build from source using the PKGBUILD
+# Or install via the release PKGBUILD (repackages the released .deb)
 curl -O https://github.com/madratzz/tauri-google-chat/releases/latest/download/PKGBUILD
 makepkg -si
 ```
@@ -78,13 +102,40 @@ npm install
 npm run dev
 ```
 
+## Test
+
+```sh
+npm test
+```
+
+CI (`.github/workflows/ci.yml`) runs `cargo fmt --check`, `clippy -D warnings`, and the unit tests on Linux, macOS and Windows for every pull request.
+
 ## Build
 
 ```sh
 npm run build
 ```
 
-The bundled app will be created under `src-tauri/target/release/bundle`.
+The bundled app will be created under `src-tauri/target/release/bundle`. Release builds use LTO, a single codegen unit, size optimisation and stripped symbols.
+
+## Versioning
+
+Versions are `X.Y.Z` where `Z = floor(unix_seconds / 60)` (UTC minute). Windows MSI cannot hold a patch above 65,535, so the WiX version is `X.Y.floor(Z / 65536).(Z % 65536)` — configured in `src-tauri/tauri.conf.json` → `bundle.windows.wix.version`.
+
+## Releasing
+
+`.github/workflows/release.yml` runs on a pushed `vX.Y.Z` tag, or manually (Actions → *Publish Release* → Run workflow; it takes the version from `src-tauri/Cargo.toml`). Either way it:
+
+1. creates (or reuses) the draft release for that version;
+2. builds macOS, Windows and Linux bundles and uploads them;
+3. builds the Arch `.pkg.tar.zst` and a binary `PKGBUILD` from the Linux `.deb` (`.github/scripts/arch-package.sh`) and uploads them;
+4. publishes the release as latest once every platform succeeded (untick *publish* on a manual run to keep it as a draft).
+
+To publish a draft early (for example while the Linux build is still running), run *Publish draft release* (`publish-draft.yml`) with the version; files uploaded later still land on the published release.
+
+Re-running a failed run is safe: the release is reused and Arch assets are replaced.
+
+The repository `PKGBUILD` builds from source and is for local use; the one attached to each release installs the prebuilt binary.
 
 ## Notes
 

@@ -1,214 +1,614 @@
+mod settings;
+mod util;
+
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering},
     Mutex,
 };
+use std::time::Duration;
 
 use tauri::{
     image::Image,
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    webview::{NewWindowResponse, PageLoadEvent, WebviewBuilder},
-    LogicalPosition, LogicalSize, Manager, WebviewUrl, WebviewWindowBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    webview::{DownloadEvent, NewWindowResponse, PageLoadEvent, WebviewBuilder},
+    AppHandle, LogicalPosition, LogicalSize, Manager, Runtime, Theme, Url, WebviewUrl,
+    WebviewWindowBuilder, WindowEvent,
+};
+use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_opener::OpenerExt;
+use tauri_plugin_window_state::StateFlags;
+
+use settings::{Settings, SettingsState};
+use util::{
+    clamp_zoom, is_in_app_url, is_openable_externally, is_sign_in_url, is_signed_out_landing,
+    title_for_url, unread_from_title,
 };
 
 const CHAT_URL: &str = "https://chat.google.com/";
+/// Google sign-in for Chat; returns to Chat afterwards (and passes straight
+/// through when already signed in).
+const SIGN_IN_URL: &str =
+    "https://accounts.google.com/ServiceLogin?service=dynamite&continue=https%3A%2F%2Fchat.google.com%2F";
+// Intentional: Google blocks some embedded-browser user agents. Retest before changing.
 const SAFARI_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15";
 const COLOR_ICON: &[u8] = include_bytes!("../icons/google-chat-color.png");
 const DARK_ICON: &[u8] = include_bytes!("../icons/google-chat-dark.png");
 const WHITE_ICON: &[u8] = include_bytes!("../icons/google-chat-white.png");
+const PEEK_ACTION_HOST: &str = "peek-action.tauri.internal";
+
 static CHILD_WINDOW_COUNTER: AtomicU64 = AtomicU64::new(1);
+/// Bumped on every resize; a deferred reposition only runs if it is still the latest.
+static RESIZE_GENERATION: AtomicU64 = AtomicU64::new(0);
+static LAST_UNREAD: AtomicI64 = AtomicI64::new(0);
+/// Hide-to-tray is only safe when a tray icon exists to bring the window back.
+static TRAY_READY: AtomicBool = AtomicBool::new(false);
 
 // Holds the real URL of the current peek webview.
 // On Windows/WebView2, on_navigation fires on a background thread and
 // the navigation cancel is async — by the time expand_peek runs,
 // peek.url() already returns the sentinel URL, not the real content URL.
-struct PeekUrl(Mutex<Option<tauri::Url>>);
+struct PeekUrl(Mutex<Option<Url>>);
 
-/// JavaScript injected into peek webviews to render a floating toolbar with
-/// "Pop Out" and "Close" buttons. Buttons navigate to sentinel URLs that
-/// `on_navigation` intercepts on the Rust side.
+/// Injected (as an initialization script) into peek webviews to render a
+/// floating toolbar. Buttons navigate to sentinel URLs that `on_navigation`
+/// intercepts on the Rust side.
 const PEEK_TOOLBAR_JS: &str = r#"
 (function() {
+    if (window.top !== window) return;
     function inject() {
         if (document.getElementById('_peek_toolbar') || !document.body) return;
         var bar = document.createElement('div');
         bar.id = '_peek_toolbar';
-        bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;height:44px;background:rgba(32,33,36,0.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);display:flex;align-items:center;justify-content:flex-end;padding:0 14px;gap:10px;z-index:2147483647;border-top:1px solid rgba(255,255,255,0.08);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-sizing:border-box;';
-
-        var expandBtn = document.createElement('button');
-        expandBtn.textContent = '↗ Pop Out';
-        expandBtn.style.cssText = 'background:#8ab4f8;color:#202124;border:none;padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;letter-spacing:0.3px;transition:all 0.15s ease;outline:none;';
-        expandBtn.onmouseenter = function() { this.style.background='#aecbfa'; this.style.transform='scale(1.04)'; };
-        expandBtn.onmouseleave = function() { this.style.background='#8ab4f8'; this.style.transform='scale(1)'; };
-        expandBtn.onclick = function(e) { e.preventDefault(); window.location.href='https://peek-action.tauri.internal/expand'; };
-
-        var closeBtn = document.createElement('button');
-        closeBtn.textContent = '✕ Close';
-        closeBtn.style.cssText = 'background:rgba(255,255,255,0.08);color:#e8eaed;border:1px solid rgba(255,255,255,0.1);padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:500;letter-spacing:0.3px;transition:all 0.15s ease;outline:none;';
-        closeBtn.onmouseenter = function() { this.style.background='rgba(234,67,53,0.8)'; this.style.borderColor='rgba(234,67,53,0.6)'; };
-        closeBtn.onmouseleave = function() { this.style.background='rgba(255,255,255,0.08)'; this.style.borderColor='rgba(255,255,255,0.1)'; };
-        closeBtn.onclick = function(e) { e.preventDefault(); window.location.href='https://peek-action.tauri.internal/close'; };
-
-        bar.appendChild(expandBtn);
-        bar.appendChild(closeBtn);
+        bar.setAttribute('role', 'toolbar');
+        bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;height:44px;background:rgb(32,33,36);display:flex;align-items:center;justify-content:flex-end;padding:0 14px;gap:10px;z-index:2147483647;border-top:1px solid rgba(255,255,255,0.08);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;box-sizing:border-box;';
+        function button(label, title, bg, fg, action) {
+            var b = document.createElement('button');
+            b.textContent = label;
+            b.title = title;
+            b.style.cssText = 'background:' + bg + ';color:' + fg + ';border:none;padding:7px 16px;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600;';
+            b.onclick = function(e) { e.preventDefault(); window.location.href = 'https://peek-action.tauri.internal/' + action; };
+            return b;
+        }
+        bar.appendChild(button('↗ Pop Out', 'Open in a separate window', '#8ab4f8', '#202124', 'expand'));
+        bar.appendChild(button('✕ Close', 'Close (Esc)', 'rgba(255,255,255,0.12)', '#e8eaed', 'close'));
         document.body.appendChild(bar);
         document.body.style.paddingBottom = '44px';
     }
-    if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', inject); }
-    inject();
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !e.defaultPrevented) window.location.href = 'https://peek-action.tauri.internal/close';
+    });
+    document.addEventListener('DOMContentLoaded', inject);
     window.addEventListener('load', inject);
 })();
 "#;
 
+/// Main-window script: shows an offline banner with Retry, and reloads when
+/// the connection returns.
+const OFFLINE_JS: &str = r#"
+(function() {
+    if (window.top !== window) return;
+    function show() {
+        if (document.getElementById('_gcd_offline') || !document.body) return;
+        var b = document.createElement('div');
+        b.id = '_gcd_offline';
+        b.setAttribute('role', 'alert');
+        b.style.cssText = 'position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;background:#202124;color:#e8eaed;padding:10px 16px;border-radius:8px;font:13px system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.4);display:flex;gap:12px;align-items:center;';
+        b.textContent = 'You are offline. Messages will sync when you reconnect.';
+        var r = document.createElement('button');
+        r.textContent = 'Retry';
+        r.style.cssText = 'background:#8ab4f8;color:#202124;border:none;border-radius:14px;padding:4px 12px;cursor:pointer;font-weight:600;';
+        r.onclick = function() { location.reload(); };
+        b.appendChild(r);
+        document.body.appendChild(b);
+    }
+    window.addEventListener('offline', show);
+    window.addEventListener('online', function() {
+        if (document.getElementById('_gcd_offline')) location.reload();
+    });
+    document.addEventListener('DOMContentLoaded', function() { if (!navigator.onLine) show(); });
+})();
+"#;
+
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        // Must be registered first: a second launch focuses the existing window.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            show_main(app)
+        }))
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                // Never restore a hidden (tray) state, and only track the main window.
+                .with_state_flags(StateFlags::all() - StateFlags::VISIBLE)
+                .with_filter(|label| label == "main")
+                .build(),
+        )
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(PeekUrl(Mutex::new(None)))
         .setup(|app| {
-            let app_handle = app.handle().clone();
-            let app_resize = app.handle().clone();
+            let handle = app.handle().clone();
+            let prefs = settings::load(&handle);
+            app.manage(SettingsState(Mutex::new(prefs.clone())));
 
-            WebviewWindowBuilder::new(
+            let app_new_window = handle.clone();
+            let main = WebviewWindowBuilder::new(
                 app,
                 "main",
                 WebviewUrl::External(CHAT_URL.parse().expect("valid Google Chat URL")),
             )
             .title("Google Chat")
             .inner_size(1280.0, 860.0)
-            .min_inner_size(960.0, 640.0)
+            .min_inner_size(600.0, 400.0)
             .resizable(true)
             .user_agent(SAFARI_USER_AGENT)
+            // Let file drops reach the page (Chat attachments) instead of Tauri.
+            .disable_drag_drop_handler()
+            .on_download(|webview, event| handle_download(webview.app_handle(), event))
+            .initialization_script(OFFLINE_JS)
             .on_new_window(move |url, _| {
-                create_peek_overlay(&app_handle, url);
+                eprintln!("[gcd] new window requested: {url}");
+                let app = app_new_window.clone();
+                if is_sign_in_url(&url) {
+                    // Sign-in must run in the main window, not the peek overlay.
+                    tauri::async_runtime::spawn(async move { navigate_main(&app, url) });
+                } else if is_in_app_url(&url) {
+                    // Defer: creating a webview inside this callback is unsafe on
+                    // macOS and Windows.
+                    tauri::async_runtime::spawn(async move { create_peek_overlay(&app, url) });
+                } else {
+                    open_externally(&app, &url);
+                }
                 NewWindowResponse::Deny
+            })
+            .on_page_load({
+                let app = handle.clone();
+                move |_, payload| {
+                    eprintln!("[gcd] main page {:?}: {}", payload.event(), payload.url());
+                    // Signed out, chat.google.com redirects to a marketing page whose
+                    // Sign in button does nothing in an embedded webview. Go straight
+                    // to Google's sign-in for Chat instead.
+                    if matches!(payload.event(), PageLoadEvent::Started)
+                        && is_signed_out_landing(payload.url())
+                        && claim_sign_in_redirect()
+                    {
+                        let url: Url = SIGN_IN_URL.parse().expect("valid sign-in URL");
+                        eprintln!("[gcd] signed-out landing page; opening {url}");
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move { navigate_main(&app, url) });
+                    }
+                }
+            })
+            .on_document_title_changed({
+                let app = handle.clone();
+                move |_, title| update_unread(&app, &title)
             })
             .build()?;
 
-            // Reposition peek overlay when the main window resizes
-            if let Some(main_win) = app.get_window("main") {
-                main_win.on_window_event(move |event| {
-                    if matches!(event, tauri::WindowEvent::Resized(_)) {
-                        reposition_peek(&app_resize);
-                    }
-                });
+            if (prefs.zoom - 1.0).abs() > f64::EPSILON {
+                let _ = main.set_zoom(prefs.zoom);
             }
 
-            let reload = MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?;
-            let back = MenuItem::with_id(app, "back", "Back", true, Some("CmdOrCtrl+["))?;
-            let forward = MenuItem::with_id(app, "forward", "Forward", true, Some("CmdOrCtrl+]"))?;
-            let quit = MenuItem::with_id(app, "quit", "Quit", true, Some("CmdOrCtrl+Q"))?;
-            let icon_color = MenuItem::with_id(app, "icon-color", "Color", true, None::<&str>)?;
-            let icon_dark = MenuItem::with_id(app, "icon-dark", "Dark", true, None::<&str>)?;
-            let icon_white = MenuItem::with_id(app, "icon-white", "White", true, None::<&str>)?;
-            let separator_one = PredefinedMenuItem::separator(app)?;
-            let separator_two = PredefinedMenuItem::separator(app)?;
-            let edit_undo = PredefinedMenuItem::undo(app, None)?;
-            let edit_redo = PredefinedMenuItem::redo(app, None)?;
-            let edit_separator_one = PredefinedMenuItem::separator(app)?;
-            let edit_cut = PredefinedMenuItem::cut(app, None)?;
-            let edit_copy = PredefinedMenuItem::copy(app, None)?;
-            let edit_paste = PredefinedMenuItem::paste(app, None)?;
-            let edit_separator_two = PredefinedMenuItem::separator(app)?;
-            let edit_select_all = PredefinedMenuItem::select_all(app, None)?;
+            let app_events = handle.clone();
+            main.on_window_event(move |event| match event {
+                WindowEvent::Resized(_) | WindowEvent::ScaleFactorChanged { .. } => {
+                    schedule_peek_reposition(&app_events)
+                }
+                WindowEvent::ThemeChanged(theme) => {
+                    apply_icon(&app_events, &settings::get(&app_events), Some(*theme))
+                }
+                WindowEvent::CloseRequested { api, .. } if TRAY_READY.load(Ordering::Relaxed) => {
+                    api.prevent_close();
+                    if let Some(w) = app_events.get_webview_window("main") {
+                        let _ = w.hide();
+                    }
+                }
+                _ => {}
+            });
 
-            let app_menu = Submenu::with_items(
-                app,
-                "Google Chat",
-                true,
-                &[
-                    &reload,
-                    &separator_one,
-                    &back,
-                    &forward,
-                    &separator_two,
-                    &quit,
-                ],
-            )?;
-
-            let edit_menu = Submenu::with_items(
-                app,
-                "Edit",
-                true,
-                &[
-                    &edit_undo,
-                    &edit_redo,
-                    &edit_separator_one,
-                    &edit_cut,
-                    &edit_copy,
-                    &edit_paste,
-                    &edit_separator_two,
-                    &edit_select_all,
-                ],
-            )?;
-
-            let icon_menu =
-                Submenu::with_items(app, "Icon", true, &[&icon_color, &icon_dark, &icon_white])?;
-
-            let menu = Menu::with_items(app, &[&app_menu, &edit_menu, &icon_menu])?;
-            app.set_menu(menu)?;
-
+            app.set_menu(build_menu(&handle)?)?;
+            match build_tray(&handle, &prefs) {
+                Ok(()) => TRAY_READY.store(true, Ordering::Relaxed),
+                Err(e) => eprintln!("tray unavailable, closing the window will quit: {e}"),
+            }
+            apply_icon(&handle, &prefs, current_theme(&handle));
+            apply_title_bar(&handle, &prefs);
             Ok(())
         })
-        .on_menu_event(|app, event| match event.id().as_ref() {
-            "reload" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.eval("window.location.reload()");
-                }
-            }
-            "back" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.eval("history.back()");
-                }
-            }
-            "forward" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.eval("history.forward()");
-                }
-            }
-            "icon-color" => set_main_window_icon(app, COLOR_ICON),
-            "icon-dark" => set_main_window_icon(app, DARK_ICON),
-            "icon-white" => set_main_window_icon(app, WHITE_ICON),
-            "quit" => app.exit(0),
-            _ => {}
-        })
-        .run(tauri::generate_context!())
-        .expect("failed to run Google Chat desktop app");
+        .on_menu_event(|app, event| handle_menu(app, event.id().as_ref()))
+        .build(tauri::generate_context!())
+        .expect("failed to build Google Chat desktop app");
+
+    app.run(|_app, _event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = _event {
+            show_main(_app);
+        }
+    });
 }
 
-/// Creates a child webview overlay inside the main window, positioned at
-/// bottom-right. This is a true in-window PiP — no separate OS window.
-fn create_peek_overlay(app: &tauri::AppHandle, url: tauri::Url) {
-    // Close any existing peek overlay first
+fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    #[cfg(target_os = "macos")]
+    let (back_key, fwd_key) = ("Cmd+[", "Cmd+]");
+    #[cfg(not(target_os = "macos"))]
+    let (back_key, fwd_key) = ("Alt+Left", "Alt+Right");
+
+    let sep = || PredefinedMenuItem::separator(app);
+
+    let reload = MenuItem::with_id(app, "reload", "Reload", true, Some("CmdOrCtrl+R"))?;
+    let back = MenuItem::with_id(app, "back", "Back", true, Some(back_key))?;
+    let forward = MenuItem::with_id(app, "forward", "Forward", true, Some(fwd_key))?;
+    let zoom_in = MenuItem::with_id(app, "zoom-in", "Zoom In", true, Some("CmdOrCtrl+="))?;
+    let zoom_out = MenuItem::with_id(app, "zoom-out", "Zoom Out", true, Some("CmdOrCtrl+-"))?;
+    let zoom_reset =
+        MenuItem::with_id(app, "zoom-reset", "Actual Size", true, Some("CmdOrCtrl+0"))?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Google Chat", true, Some("CmdOrCtrl+Q"))?;
+
+    let icon_menu = Submenu::with_items(
+        app,
+        "App Icon",
+        true,
+        &[
+            &MenuItem::with_id(app, "icon-system", "Match System", true, None::<&str>)?,
+            &MenuItem::with_id(app, "icon-color", "Color", true, None::<&str>)?,
+            &MenuItem::with_id(app, "icon-dark", "Dark", true, None::<&str>)?,
+            &MenuItem::with_id(app, "icon-white", "White", true, None::<&str>)?,
+        ],
+    )?;
+
+    let title_bar_menu = Submenu::with_items(
+        app,
+        "Title Bar",
+        true,
+        &[
+            &MenuItem::with_id(app, "titlebar-system", "Match System", true, None::<&str>)?,
+            &MenuItem::with_id(app, "titlebar-light", "Light", true, None::<&str>)?,
+            &MenuItem::with_id(app, "titlebar-dark", "Dark", true, None::<&str>)?,
+        ],
+    )?;
+
+    #[cfg(target_os = "macos")]
+    let app_menu = Submenu::with_items(
+        app,
+        "Google Chat",
+        true,
+        &[
+            &PredefinedMenuItem::about(app, None, None)?,
+            &sep()?,
+            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide_others(app, None)?,
+            &PredefinedMenuItem::show_all(app, None)?,
+            &sep()?,
+            &quit,
+        ],
+    )?;
+    #[cfg(not(target_os = "macos"))]
+    let app_menu = Submenu::with_items(app, "File", true, &[&quit])?;
+
+    let edit_menu = Submenu::with_items(
+        app,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, None)?,
+            &PredefinedMenuItem::redo(app, None)?,
+            &sep()?,
+            &PredefinedMenuItem::cut(app, None)?,
+            &PredefinedMenuItem::copy(app, None)?,
+            &PredefinedMenuItem::paste(app, None)?,
+            &sep()?,
+            &PredefinedMenuItem::select_all(app, None)?,
+        ],
+    )?;
+
+    let view_menu = Submenu::with_items(
+        app,
+        "View",
+        true,
+        &[
+            &reload,
+            &back,
+            &forward,
+            &sep()?,
+            &zoom_in,
+            &zoom_out,
+            &zoom_reset,
+            &sep()?,
+            &icon_menu,
+            &title_bar_menu,
+        ],
+    )?;
+
+    let window_menu = Submenu::with_items(
+        app,
+        "Window",
+        true,
+        &[
+            &PredefinedMenuItem::minimize(app, None)?,
+            &PredefinedMenuItem::maximize(app, None)?,
+            &sep()?,
+            &PredefinedMenuItem::close_window(app, None)?,
+        ],
+    )?;
+
+    Menu::with_items(app, &[&app_menu, &edit_menu, &view_menu, &window_menu])
+}
+
+fn build_tray(app: &AppHandle, prefs: &Settings) -> tauri::Result<()> {
+    let menu = Menu::with_items(
+        app,
+        &[
+            &MenuItem::with_id(app, "show", "Show Google Chat", true, None::<&str>)?,
+            &PredefinedMenuItem::separator(app)?,
+            &MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?,
+        ],
+    )?;
+    let mut builder = TrayIconBuilder::with_id("main")
+        .tooltip("Google Chat")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main(tray.app_handle());
+            }
+        });
+    let bytes = icon_bytes(&prefs.icon, current_theme(app));
+    match Image::from_bytes(bytes) {
+        Ok(icon) => builder = builder.icon(icon),
+        Err(_) => {
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
+            }
+        }
+    }
+    // macOS template images are tinted by the menu bar, so the monochrome
+    // variants render black or white automatically. Color stays as-is.
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.icon_as_template(prefs.icon != "color");
+    }
+    builder.build(app)?;
+    Ok(())
+}
+
+fn handle_menu(app: &AppHandle, id: &str) {
+    let main = app.get_webview_window("main");
+    match id {
+        "reload" => {
+            if let Some(w) = main {
+                let _ = w.reload();
+            }
+        }
+        "back" => {
+            if let Some(w) = main {
+                let _ = w.eval("history.back()");
+            }
+        }
+        "forward" => {
+            if let Some(w) = main {
+                let _ = w.eval("history.forward()");
+            }
+        }
+        "zoom-in" | "zoom-out" | "zoom-reset" => {
+            let s = settings::update(app, |s| {
+                s.zoom = match id {
+                    "zoom-in" => clamp_zoom(s.zoom + util::ZOOM_STEP),
+                    "zoom-out" => clamp_zoom(s.zoom - util::ZOOM_STEP),
+                    _ => 1.0,
+                }
+            });
+            if let Some(w) = main {
+                let _ = w.set_zoom(s.zoom);
+            }
+        }
+        "icon-system" | "icon-color" | "icon-dark" | "icon-white" => {
+            let s = settings::update(app, |s| s.icon = id.trim_start_matches("icon-").into());
+            apply_icon(app, &s, current_theme(app));
+        }
+        "titlebar-system" | "titlebar-light" | "titlebar-dark" => {
+            let s = settings::update(app, |s| {
+                s.title_bar = id.trim_start_matches("titlebar-").into()
+            });
+            apply_title_bar(app, &s);
+        }
+        "show" => show_main(app),
+        "quit" => app.exit(0),
+        _ => {}
+    }
+}
+
+fn show_main<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
+}
+
+fn toggle_main(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        if w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false) {
+            let _ = w.hide();
+        } else {
+            show_main(app);
+        }
+    }
+}
+
+// Link policy is applied only to new-window requests (how Chat opens message
+// links). In-page navigations are never filtered: on macOS the navigation
+// handler also fires for iframes and `javascript:` links, and filtering them
+// breaks Google sign-in.
+
+/// Allows at most one automatic sign-in redirect per minute, so an account
+/// that keeps landing on the marketing page can't loop.
+fn claim_sign_in_redirect() -> bool {
+    static LAST: AtomicU64 = AtomicU64::new(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let last = LAST.load(Ordering::Relaxed);
+    if now.saturating_sub(last) < 60 {
+        return false;
+    }
+    LAST.store(now, Ordering::Relaxed);
+    true
+}
+
+/// Path of the download in progress, for the completion notification
+/// (macOS doesn't report the final path).
+static LAST_DOWNLOAD: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+
+/// Saves downloads to the user's Downloads folder without overwriting, and
+/// notifies when done. Without a handler, WKWebView cancels every download.
+fn handle_download(app: &AppHandle, event: DownloadEvent<'_>) -> bool {
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            let Ok(dir) = app.path().download_dir() else {
+                eprintln!("[gcd] no Downloads folder; download cancelled: {url}");
+                return false;
+            };
+            let name = util::download_file_name(destination.file_name(), &url);
+            let path = util::unique_path(&dir, &name, |p| p.exists());
+            eprintln!("[gcd] downloading {url} -> {}", path.display());
+            *destination = path.clone();
+            if let Ok(mut last) = LAST_DOWNLOAD.lock() {
+                *last = Some(path);
+            }
+            true
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            let path = path.or_else(|| LAST_DOWNLOAD.lock().ok().and_then(|mut l| l.take()));
+            let name = path
+                .as_deref()
+                .and_then(|p| p.file_name())
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "file".into());
+            eprintln!("[gcd] download finished (success={success}): {url}");
+            let body = if success {
+                format!("Saved {name} to Downloads")
+            } else {
+                format!("Download of {name} failed")
+            };
+            let _ = app
+                .notification()
+                .builder()
+                .title("Google Chat")
+                .body(body)
+                .show();
+            true
+        }
+        _ => true,
+    }
+}
+
+/// Loads `url` in the main window (used for Google sign-in pages).
+fn navigate_main(app: &AppHandle, url: Url) {
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        close_peek(&app2);
+        if let Some(w) = app2.get_webview_window("main") {
+            if let Err(e) = w.navigate(url) {
+                eprintln!("[gcd] failed to open sign-in page: {e}");
+            }
+        }
+    });
+}
+
+fn open_externally(app: &AppHandle, url: &Url) {
+    if !is_openable_externally(url) {
+        eprintln!("[gcd] ignored link with unsupported scheme: {url}");
+        return;
+    }
+    eprintln!("[gcd] opening in browser: {url}");
+    // Navigation callbacks run on a webview thread on Windows; don't block it.
+    let app = app.clone();
+    let url = url.to_string();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = app.opener().open_url(url, None::<&str>) {
+            eprintln!("failed to open link externally: {e}");
+        }
+    });
+}
+
+/// Sets the dock/taskbar badge and tray tooltip from the page title, and
+/// notifies when new messages arrive while the window is not focused.
+fn update_unread(app: &AppHandle, title: &str) {
+    let count = unread_from_title(title);
+    let previous = LAST_UNREAD.swap(count, Ordering::Relaxed);
+    if count == previous {
+        return;
+    }
+    let app = app.clone();
+    let _ = app.clone().run_on_main_thread(move || {
+        let Some(w) = app.get_webview_window("main") else {
+            return;
+        };
+        let _ = w.set_badge_count((count > 0).then_some(count));
+        if let Some(tray) = app.tray_by_id("main") {
+            let tip = if count > 0 {
+                format!("Google Chat — {count} unread")
+            } else {
+                "Google Chat".into()
+            };
+            let _ = tray.set_tooltip(Some(tip));
+        }
+        let focused = w.is_focused().unwrap_or(false) && w.is_visible().unwrap_or(false);
+        if count > previous && !focused {
+            let _ = app
+                .notification()
+                .builder()
+                .title("Google Chat")
+                .body(format!(
+                    "{count} unread conversation{}",
+                    if count == 1 { "" } else { "s" }
+                ))
+                .show();
+        }
+    });
+}
+
+/// Creates a child webview overlay inside the main window, centred.
+/// This is a true in-window PiP — no separate OS window.
+fn create_peek_overlay(app: &AppHandle, url: Url) {
     if let Some(existing) = app.get_webview("peek") {
         let _ = existing.close();
     }
-
     let Some(main_window) = app.get_window("main") else {
         return;
     };
     let (size, pos) = peek_size_and_position_logical(app);
 
-    // Bug 1: store the real URL before creating the webview. On Windows/WebView2,
-    // on_navigation cancel is async — peek.url() returns the sentinel by the time
-    // expand_peek runs, so we read from state instead.
+    // Store the real URL before creating the webview (see `PeekUrl`).
     if let Ok(mut guard) = app.state::<PeekUrl>().0.lock() {
         *guard = Some(url.clone());
     }
 
     let app_for_nav = app.clone();
-
+    let app_for_new = app.clone();
     let builder = WebviewBuilder::new("peek", WebviewUrl::External(url))
         .user_agent(SAFARI_USER_AGENT)
+        // Let file drops reach the page (Chat attachments) instead of Tauri.
+        .disable_drag_drop_handler()
+        .on_download(|webview, event| handle_download(webview.app_handle(), event))
+        .initialization_script(PEEK_TOOLBAR_JS)
         .on_navigation(move |nav_url| {
-            if nav_url.host_str() == Some("peek-action.tauri.internal") {
-                // Bug 3: on Windows/WebView2, on_navigation fires on a background thread.
-                // Calling window ops directly deadlocks — wrap everything in spawn so
-                // the callback returns immediately and the task runs on the async runtime.
+            if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
+                // On Windows/WebView2 this runs on a background thread and window
+                // ops would deadlock, so defer the work to the async runtime.
                 let app = app_for_nav.clone();
                 match nav_url.path() {
                     "/expand" => {
-                        tauri::async_runtime::spawn(async move { expand_peek(&app); });
+                        tauri::async_runtime::spawn(async move { expand_peek(&app) });
                     }
                     "/close" => {
-                        tauri::async_runtime::spawn(async move { close_peek(&app); });
+                        tauri::async_runtime::spawn(async move { close_peek(&app) });
                     }
                     _ => {}
                 }
@@ -216,182 +616,202 @@ fn create_peek_overlay(app: &tauri::AppHandle, url: tauri::Url) {
             }
             true
         })
-        .on_page_load(|webview, payload| {
-            if matches!(payload.event(), PageLoadEvent::Finished) {
-                let _ = webview.eval(PEEK_TOOLBAR_JS);
+        .on_new_window(move |url, _| {
+            if is_in_app_url(&url) {
+                let app = app_for_new.clone();
+                tauri::async_runtime::spawn(async move { open_child_window(&app, url) });
+            } else {
+                open_externally(&app_for_new, &url);
             }
+            NewWindowResponse::Deny
         });
 
-    let result = main_window.add_child(
-        builder,
-        pos,
-        size,
-    );
-
-    match result {
-        Ok(ref peek) => {
-            let _ = peek.eval(PEEK_TOOLBAR_JS);
-        }
-        Err(e) => eprintln!("failed to create peek overlay: {e}"),
+    if let Err(e) = main_window.add_child(builder, pos, size) {
+        eprintln!("failed to create peek overlay: {e}");
     }
 }
 
-/// Pops the peek webview out into a full-size standalone window,
-/// then closes the in-window peek overlay.
-fn expand_peek(app: &tauri::AppHandle) {
+/// Pops the peek webview out into a standalone window, then closes the overlay.
+fn expand_peek(app: &AppHandle) {
     let Some(peek) = app.get_webview("peek") else {
         return;
     };
-
-    // Bug 1: read the real URL from app state rather than calling peek.url().
-    // On Windows/WebView2, the navigation cancel is async, so peek.url() returns
-    // the sentinel URL by the time this handler executes.
-    let url = {
-        let state = app.state::<PeekUrl>();
-        let guard = state.0.lock().unwrap();
-        match guard.clone() {
-            Some(u) => u,
-            None => return,
-        }
-    };
-
+    // Read (and clear) the real URL from state rather than peek.url(); see `PeekUrl`.
+    let url = app
+        .state::<PeekUrl>()
+        .0
+        .lock()
+        .ok()
+        .and_then(|mut g| g.take());
     let _ = peek.close();
+    if let Some(url) = url {
+        open_child_window(app, url);
+    }
+}
 
-    let label = child_window_label(&url);
-    let app_clone = app.clone();
+/// Standalone window for Google Workspace content (Docs, Drive, Meet, ...).
+fn open_child_window(app: &AppHandle, url: Url) {
+    let label = format!(
+        "expanded-{}",
+        CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let app_new = app.clone();
 
-    // Bug 2: on_new_window must create a new WebviewWindow rather than calling
-    // win.navigate() — navigate() inside on_new_window corrupts WebView2 internal
-    // state on Windows, leaving the window unresponsive.
+    // Creating a new WebviewWindow (instead of navigate()) avoids corrupting
+    // WebView2 internal state on Windows.
     let result = WebviewWindowBuilder::new(app, label, WebviewUrl::External(url.clone()))
         .title(title_for_url(&url))
         .inner_size(1180.0, 820.0)
-        .min_inner_size(820.0, 560.0)
+        .min_inner_size(480.0, 360.0)
         .resizable(true)
         .user_agent(SAFARI_USER_AGENT)
+        // Let file drops reach the page (Chat attachments) instead of Tauri.
+        .disable_drag_drop_handler()
+        .on_download(|webview, event| handle_download(webview.app_handle(), event))
         .on_new_window(move |new_url, _| {
-            let app = app_clone.clone();
-            let new_url = new_url.clone();
-            tauri::async_runtime::spawn(async move {
-                let new_label = child_window_label(&new_url);
-                let _ = WebviewWindowBuilder::new(&app, new_label, WebviewUrl::External(new_url.clone()))
-                    .title(title_for_url(&new_url))
-                    .inner_size(1180.0, 820.0)
-                    .min_inner_size(820.0, 560.0)
-                    .resizable(true)
-                    .user_agent(SAFARI_USER_AGENT)
-                    .build();
-            });
+            if is_in_app_url(&new_url) {
+                let app = app_new.clone();
+                tauri::async_runtime::spawn(async move { open_child_window(&app, new_url) });
+            } else {
+                open_externally(&app_new, &new_url);
+            }
             NewWindowResponse::Deny
         })
         .build();
 
-    // Bug 2: win.close() can be silently swallowed by WebView2 on Windows.
-    // Use prevent_close() + destroy() to force-release the WebView2 process.
-    if let Ok(win) = result {
-        let win_clone = win.clone();
-        win.on_window_event(move |event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = win_clone.destroy();
-            }
-        });
+    match result {
+        // WebView2 can silently swallow close(); force-release the process.
+        #[cfg(target_os = "windows")]
+        Ok(win) => {
+            let win_clone = win.clone();
+            win.on_window_event(move |event| {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = win_clone.destroy();
+                }
+            });
+        }
+        #[cfg(not(target_os = "windows"))]
+        Ok(_) => {}
+        Err(e) => eprintln!("failed to open window: {e}"),
     }
 }
 
-/// Closes the peek overlay webview.
-fn close_peek(app: &tauri::AppHandle) {
+fn close_peek(app: &AppHandle) {
+    if let Ok(mut g) = app.state::<PeekUrl>().0.lock() {
+        *g = None;
+    }
     if let Some(peek) = app.get_webview("peek") {
         let _ = peek.close();
     }
 }
 
-/// Repositions the peek overlay to stay centered after resize.
-fn reposition_peek(app: &tauri::AppHandle) {
-    let Some(peek) = app.get_webview("peek") else {
+/// Debounced: a resize drag fires many events; only reposition once it settles.
+fn schedule_peek_reposition(app: &AppHandle) {
+    if app.get_webview("peek").is_none() {
         return;
-    };
-    let (size, pos) = peek_size_and_position_logical(app);
-    let _ = peek.set_size(size);
-    let _ = peek.set_position(pos);
+    }
+    let generation = RESIZE_GENERATION.fetch_add(1, Ordering::Relaxed) + 1;
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(30));
+        if RESIZE_GENERATION.load(Ordering::Relaxed) != generation {
+            return;
+        }
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            if let Some(peek) = app2.get_webview("peek") {
+                let (size, pos) = peek_size_and_position_logical(&app2);
+                let _ = peek.set_size(size);
+                let _ = peek.set_position(pos);
+            }
+        });
+    });
 }
 
-/// Calculates the logical size and logical position for the peek overlay at 85% centered.
-fn peek_size_and_position_logical(app: &tauri::AppHandle) -> (LogicalSize<f64>, LogicalPosition<f64>) {
+fn peek_size_and_position_logical(app: &AppHandle) -> (LogicalSize<f64>, LogicalPosition<f64>) {
+    let fallback = (
+        LogicalSize::new(800.0, 600.0),
+        LogicalPosition::new(100.0, 100.0),
+    );
     let Some(main_window) = app.get_window("main") else {
-        return (LogicalSize::new(800.0, 600.0), LogicalPosition::new(100.0, 100.0));
+        return fallback;
     };
-    let Ok(phys_size) = main_window.inner_size() else {
-        return (LogicalSize::new(800.0, 600.0), LogicalPosition::new(100.0, 100.0));
+    let Ok(phys) = main_window.inner_size() else {
+        return fallback;
     };
     let scale = main_window.scale_factor().unwrap_or(1.0);
-    let logical_w = phys_size.width as f64 / scale;
-    let logical_h = phys_size.height as f64 / scale;
-
-    let w = logical_w * 0.85;
-    let h = logical_h * 0.85;
-
-    let x = (logical_w - w) / 2.0;
-    let y = (logical_h - h) / 2.0;
-
+    let (x, y, w, h) = util::peek_geometry(phys.width as f64 / scale, phys.height as f64 / scale);
     (LogicalSize::new(w, h), LogicalPosition::new(x, y))
 }
 
-fn set_main_window_icon(app: &tauri::AppHandle, icon_bytes: &[u8]) {
+/// Sets the native window appearance (title bar) to follow the system or a
+/// fixed light/dark theme, since it can't see Google Chat's own theme.
+fn apply_title_bar(app: &AppHandle, prefs: &Settings) {
+    let theme = match prefs.title_bar.as_str() {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    };
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.set_theme(theme);
+    }
+}
+
+/// The window's current appearance, used to pick a monochrome icon.
+fn current_theme(app: &AppHandle) -> Option<Theme> {
+    app.get_webview_window("main").and_then(|w| w.theme().ok())
+}
+
+/// Chooses the icon bytes for a setting. "system" (the default) uses white on
+/// dark themes and black on light or unknown themes.
+fn icon_bytes(icon: &str, theme: Option<Theme>) -> &'static [u8] {
+    match icon {
+        "color" => COLOR_ICON,
+        "dark" => DARK_ICON,
+        "white" => WHITE_ICON,
+        _ => match theme {
+            Some(Theme::Dark) => WHITE_ICON,
+            _ => DARK_ICON,
+        },
+    }
+}
+
+/// Applies the icon to the window (taskbar), the macOS Dock, and the tray.
+fn apply_icon(app: &AppHandle, prefs: &Settings, theme: Option<Theme>) {
+    let bytes = icon_bytes(&prefs.icon, theme);
     let Some(window) = app.get_webview_window("main") else {
         return;
     };
-    if let Ok(icon) = Image::from_bytes(icon_bytes) {
+    if let Ok(icon) = Image::from_bytes(bytes) {
         let _ = window.set_icon(icon);
     }
     #[cfg(target_os = "macos")]
-    set_macos_dock_icon(icon_bytes);
+    set_macos_dock_icon(bytes);
+
+    if let Some(tray) = app.tray_by_id("main") {
+        if let Ok(icon) = Image::from_bytes(bytes) {
+            let _ = tray.set_icon(Some(icon));
+        }
+        #[cfg(target_os = "macos")]
+        let _ = tray.set_icon_as_template(prefs.icon != "color");
+    }
 }
 
 #[cfg(target_os = "macos")]
 fn set_macos_dock_icon(icon_bytes: &[u8]) {
-    use cocoa::base::{id, nil};
-    use objc::{msg_send, sel, sel_impl};
+    use objc2::{AllocAnyThread, MainThreadMarker};
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::NSData;
 
-    unsafe {
-        let nsdata_class = objc::runtime::Class::get("NSData").unwrap();
-        let data: id = msg_send![nsdata_class, dataWithBytes: icon_bytes.as_ptr() length: icon_bytes.len()];
-
-        let ns_image_class = objc::runtime::Class::get("NSImage").unwrap();
-        let alloc_image: id = msg_send![ns_image_class, alloc];
-        let image: id = msg_send![alloc_image, initWithData: data];
-
-        if image != nil {
-            let ns_app_class = objc::runtime::Class::get("NSApplication").unwrap();
-            let app: id = msg_send![ns_app_class, sharedApplication];
-            let _: () = msg_send![app, setApplicationIconImage: image];
-        }
-    }
-}
-
-
-fn child_window_label(url: &tauri::Url) -> String {
-    let id = CHILD_WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let sanitized: String = url
-        .as_str()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .take(80)
-        .collect();
-    format!("expanded-{id}-{sanitized}")
-}
-
-fn title_for_url(url: &tauri::Url) -> &'static str {
-    match url.host_str() {
-        Some("docs.google.com") => "Google Docs",
-        Some("drive.google.com") => "Google Drive",
-        Some("mail.google.com" | "gmail.com") => "Gmail",
-        Some("calendar.google.com") => "Google Calendar",
-        Some("meet.google.com") => "Google Meet",
-        Some("contacts.google.com") => "Google Contacts",
-        Some("keep.google.com") => "Google Keep",
-        Some("tasks.google.com") => "Google Tasks",
-        Some("jamboard.google.com") => "Google Jamboard",
-        _ => "Google Workspace",
-    }
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let data = NSData::with_bytes(icon_bytes);
+    let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) else {
+        return;
+    };
+    let ns_app = NSApplication::sharedApplication(mtm);
+    // SAFETY: called on the main thread with a valid, retained NSImage.
+    unsafe { ns_app.setApplicationIconImage(Some(&image)) };
 }
