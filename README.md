@@ -12,7 +12,7 @@ The app opens `https://chat.google.com/` in a native desktop webview.
 - **Remembers your window** — size, position, monitor and maximized state are restored on launch. Minimum size is 600×400 so the app works in split-screen and on small laptops.
 - **Zoom** — View → Zoom In / Zoom Out / Actual Size (`Ctrl/Cmd` + `=`, `-`, `0`), persisted between launches.
 - **Title bar** — View → Title Bar → Match System / Light / Dark. The native title bar follows macOS/Windows appearance by default and can't see Google Chat's own theme, so pick Dark if you use Chat's dark theme on a light system; persisted.
-- **App icon** — View → App Icon switches between color, dark, and white variants; the choice is persisted.
+- **App icon** — by default the taskbar, Dock, and tray icon are white on a dark system theme and black on a light one, and update when the theme changes. View → App Icon can choose Match System (default), Color, Dark, or White; the choice is persisted.
 - **Downloads** — files you download from Chat are saved to your Downloads folder (never overwriting: `name (2).ext`), with a notification when done.
 - **Offline banner** — shows a Retry banner when the connection drops and reloads automatically when it returns.
 - **Single instance** — launching the app again focuses the existing window.
