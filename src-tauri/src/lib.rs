@@ -21,8 +21,8 @@ use tauri_plugin_window_state::StateFlags;
 
 use settings::{Settings, SettingsState};
 use util::{
-    clamp_zoom, is_in_app_url, is_openable_externally, is_sign_in_url, is_signed_out_landing,
-    title_for_url, unread_from_title,
+    clamp_zoom, is_blank_url, is_in_app_url, is_openable_externally, is_sign_in_url,
+    is_signed_out_landing, title_for_url, unread_from_title,
 };
 
 const CHAT_URL: &str = "https://chat.google.com/";
@@ -59,7 +59,8 @@ struct PeekUrl(Mutex<Option<Url>>);
 /// intercepts on the Rust side.
 const PEEK_TOOLBAR_JS: &str = r#"
 (function() {
-    if (window.top !== window) return;
+    if (window.top !== window || window.__gcdPeekToolbar) return;
+    window.__gcdPeekToolbar = true;
     function inject() {
         if (document.getElementById('_peek_toolbar') || !document.body) return;
         var bar = document.createElement('div');
@@ -84,6 +85,24 @@ const PEEK_TOOLBAR_JS: &str = r#"
     });
     document.addEventListener('DOMContentLoaded', inject);
     window.addEventListener('load', inject);
+    inject();
+})();
+"#;
+
+/// Main-window script: while a peek overlay is open (Rust sets
+/// `__gcdPeekOpen`), Escape or a click on the visible main window closes it,
+/// so a blank or broken peek page can never trap the user.
+const MAIN_PEEK_CLOSE_JS: &str = r#"
+(function() {
+    if (window.top !== window) return;
+    function close(e) {
+        if (!window.__gcdPeekOpen) return;
+        window.__gcdPeekOpen = false;
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        window.location.href = 'https://peek-action.tauri.internal/close';
+    }
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') close(e); }, true);
+    document.addEventListener('mousedown', close, true);
 })();
 "#;
 
@@ -150,10 +169,26 @@ pub fn run() {
             .disable_drag_drop_handler()
             .on_download(|webview, event| handle_download(webview.app_handle(), event))
             .initialization_script(OFFLINE_JS)
+            .initialization_script(MAIN_PEEK_CLOSE_JS)
+            .on_navigation({
+                let app = handle.clone();
+                move |nav_url| {
+                    if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move { close_peek(&app) });
+                        return false;
+                    }
+                    true
+                }
+            })
             .on_new_window(move |url, _| {
                 eprintln!("[gcd] new window requested: {url}");
                 let app = app_new_window.clone();
-                if is_sign_in_url(&url) {
+                if is_blank_url(&url) {
+                    // Script-driven popups (window.open() then write/redirect) can't
+                    // be followed once denied; a peek of them is just a blank page.
+                    eprintln!("[gcd] ignored blank popup");
+                } else if is_sign_in_url(&url) {
                     // Sign-in must run in the main window, not the peek overlay.
                     tauri::async_runtime::spawn(async move { navigate_main(&app, url) });
                 } else if is_in_app_url(&url) {
@@ -600,8 +635,22 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
         .user_agent(SAFARI_USER_AGENT)
         // Let file drops reach the page (Chat attachments) instead of Tauri.
         .disable_drag_drop_handler()
-        .on_download(|webview, event| handle_download(webview.app_handle(), event))
+        .on_download(|webview, event| {
+            // A link that turns out to be a download leaves the peek blank.
+            if matches!(event, DownloadEvent::Requested { .. }) {
+                let app = webview.app_handle().clone();
+                tauri::async_runtime::spawn(async move { close_peek(&app) });
+            }
+            handle_download(webview.app_handle(), event)
+        })
         .initialization_script(PEEK_TOOLBAR_JS)
+        .on_page_load(|webview, payload| {
+            // Init scripts don't always run (e.g. about:blank, error pages);
+            // re-inject so Close is always reachable.
+            if matches!(payload.event(), PageLoadEvent::Finished) {
+                let _ = webview.eval(PEEK_TOOLBAR_JS);
+            }
+        })
         .on_navigation(move |nav_url| {
             if nav_url.host_str() == Some(PEEK_ACTION_HOST) {
                 // On Windows/WebView2 this runs on a background thread and window
@@ -621,7 +670,9 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
             true
         })
         .on_new_window(move |url, _| {
-            if is_in_app_url(&url) {
+            if is_blank_url(&url) {
+                eprintln!("[gcd] ignored blank popup");
+            } else if is_in_app_url(&url) {
                 let app = app_for_new.clone();
                 tauri::async_runtime::spawn(async move { open_child_window(&app, url) });
             } else {
@@ -630,8 +681,16 @@ fn create_peek_overlay(app: &AppHandle, url: Url) {
             NewWindowResponse::Deny
         });
 
-    if let Err(e) = main_window.add_child(builder, pos, size) {
-        eprintln!("failed to create peek overlay: {e}");
+    match main_window.add_child(builder, pos, size) {
+        Ok(_) => set_main_peek_flag(app, true),
+        Err(e) => eprintln!("failed to create peek overlay: {e}"),
+    }
+}
+
+/// Tells the main page whether a peek is open (see `MAIN_PEEK_CLOSE_JS`).
+fn set_main_peek_flag(app: &AppHandle, open: bool) {
+    if let Some(main) = app.get_webview_window("main") {
+        let _ = main.eval(format!("window.__gcdPeekOpen = {open};"));
     }
 }
 
@@ -648,6 +707,7 @@ fn expand_peek(app: &AppHandle) {
         .ok()
         .and_then(|mut g| g.take());
     let _ = peek.close();
+    set_main_peek_flag(app, false);
     if let Some(url) = url {
         open_child_window(app, url);
     }
@@ -673,7 +733,9 @@ fn open_child_window(app: &AppHandle, url: Url) {
         .disable_drag_drop_handler()
         .on_download(|webview, event| handle_download(webview.app_handle(), event))
         .on_new_window(move |new_url, _| {
-            if is_in_app_url(&new_url) {
+            if is_blank_url(&new_url) {
+                eprintln!("[gcd] ignored blank popup");
+            } else if is_in_app_url(&new_url) {
                 let app = app_new.clone();
                 tauri::async_runtime::spawn(async move { open_child_window(&app, new_url) });
             } else {
@@ -708,6 +770,7 @@ fn close_peek(app: &AppHandle) {
     if let Some(peek) = app.get_webview("peek") {
         let _ = peek.close();
     }
+    set_main_peek_flag(app, false);
 }
 
 /// Debounced: a resize drag fires many events; only reposition once it settles.

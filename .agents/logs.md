@@ -7,10 +7,17 @@ Last updated: 2026-11-09
 ### 2026-11-16T10:50:00Z — claude/affectionate-rubin-2noqud
 
 Dock/taskbar icon was oversized and used the stale pre-2026 glyph. Regenerated the in-app PNGs from `google-chat-2026-square.svg` with padding (1024px, glyph about 85% of the canvas). Added `google-chat-bar-dark.png` and `google-chat-bar-white.png` (full colour, monochrome top bar) as the new "Match System" default. Bundle launcher icons (`icon.icns`, `icon.ico`, `*.png`) are unchanged.
+### 2026-11-16T10:36:00Z — claude/session_01CWCdnDmCHpswR2bUkQZH9o
+
+CI `cargo fmt --check` failed on PR #23 (import list line width in `lib.rs`); ran `cargo fmt`. Formatting only; no documentation change needed.
+
+### 2026-11-16T09:41:41Z — claude/session_01CWCdnDmCHpswR2bUkQZH9o
+
+Release 1.3.29913701: user reported "Open in new tab" on a `.md` attachment opened a blank peek with no way to close it. Peek close previously relied solely on the injected toolbar/Escape inside the peek page. Added `util::is_blank_url` (ignore `about:` popups), close-on-download in peek, toolbar re-eval on page load, and a main-window `MAIN_PEEK_CLOSE_JS` + `on_navigation` sentinel so Escape/click outside closes the peek.
 
 ### 2026-11-16T09:42:48Z — claude/affectionate-rubin-2noqud
 
-Taskbar, Dock, and tray icon now default to a monochrome variant that follows the window theme (white on dark, black on light). Added `icon: "system"` as the new default (`settings.rs`), `icon_bytes` and theme-aware `apply_icon` in `lib.rs`, a tray icon built from the same choice (macOS uses a template image), and a `ThemeChanged` refresh. Explicit Color/Dark/White choices are kept. Unversioned; CHANGELOG has an Unreleased entry. Verified with `cargo fmt` and `cargo check` on Linux; the macOS-only template calls were checked against the Tauri 2.12.5 source but not compiled on macOS. Not yet checked on real hardware.
+Taskbar, Dock, and tray icon now default to a monochrome variant that follows the window theme (white on dark, black on light). Added `icon: "system"` as the new default (`settings.rs`), `icon_bytes` and theme-aware `apply_icon` in `lib.rs`, a tray icon built from the same choice (macOS uses a template image), and a `ThemeChanged` refresh. Explicit Color/Dark/White choices are kept. Shipped in 1.3.29913701 (merged into the release branch). Verified with `cargo fmt` and `cargo check` on Linux; the macOS-only template calls were checked against the Tauri 2.12.5 source but not compiled on macOS. Not yet checked on real hardware.
 
 ### 2026-11-12T08:37:01Z — claude/session_01CWCdnFCDU7XtU1qsJ45txs
 

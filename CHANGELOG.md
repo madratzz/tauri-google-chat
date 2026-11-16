@@ -1,7 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.3.29913701 — 2026-11-16T09:41:41Z
 
+Patch release. UTC-minute identifier `29913701`; Windows MSI version `1.3.456.29285`.
+
+- Fix: opening some attachments ("Open in new tab") showed a blank white overlay that could not be closed. Script-driven `about:blank` popups are now ignored instead of opened as an empty peek; a peek whose link turns into a download closes itself; the peek's Close toolbar is re-injected on every page load; and Escape or a click anywhere on the main window now always closes an open peek.
 - Change: the app icon now follows the system theme by default: white on dark, black on light. The taskbar/window icon, the macOS Dock icon, and the tray icon all use it, and update when the theme changes. The tray icon was previously always the color artwork. View → App Icon adds a "Match System" option; Color, Dark, and White are unchanged. A saved explicit choice is kept.
 - Change: the default "Match System" icon uses the 2026 Google Chat artwork in full colour, with only its top bar black (light theme) or white (dark theme). Dark and White are regenerated from the 2026 artwork with Dock-sized padding, so they are no longer oversized.
 
