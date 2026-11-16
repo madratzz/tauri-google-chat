@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-16T10:36:00Z — claude/session_01CWCdnDmCHpswR2bUkQZH9o
+
+CI `cargo fmt --check` failed on PR #23 (import list line width in `lib.rs`); ran `cargo fmt`. Formatting only; no documentation change needed.
+
 ### 2026-11-16T09:41:41Z — claude/session_01CWCdnDmCHpswR2bUkQZH9o
 
 Release 1.3.29913701: user reported "Open in new tab" on a `.md` attachment opened a blank peek with no way to close it. Peek close previously relied solely on the injected toolbar/Escape inside the peek page. Added `util::is_blank_url` (ignore `about:` popups), close-on-download in peek, toolbar re-eval on page load, and a main-window `MAIN_PEEK_CLOSE_JS` + `on_navigation` sentinel so Escape/click outside closes the peek.
