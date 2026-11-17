@@ -62,7 +62,8 @@ const PEEK_TOOLBAR_JS: &str = r#"
     if (window.top !== window || window.__gcdPeekToolbar) return;
     window.__gcdPeekToolbar = true;
     function inject() {
-        if (document.getElementById('_peek_toolbar') || !document.body) return;
+        var root = document.documentElement;
+        if (document.getElementById('_peek_toolbar') || !root) return;
         var bar = document.createElement('div');
         bar.id = '_peek_toolbar';
         bar.setAttribute('role', 'toolbar');
@@ -77,12 +78,16 @@ const PEEK_TOOLBAR_JS: &str = r#"
         }
         bar.appendChild(button('↗ Pop Out', 'Open in a separate window', '#8ab4f8', '#202124', 'expand'));
         bar.appendChild(button('✕ Close', 'Close (Esc)', 'rgba(255,255,255,0.12)', '#e8eaed', 'close'));
-        document.body.appendChild(bar);
-        document.body.style.paddingBottom = '44px';
+        // On <html>, not <body>: a transformed or hidden body would otherwise
+        // capture or clip the fixed bar.
+        root.appendChild(bar);
+        if (document.body) document.body.style.paddingBottom = '44px';
     }
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && !e.defaultPrevented) window.location.href = 'https://peek-action.tauri.internal/close';
-    });
+    window.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') window.location.href = 'https://peek-action.tauri.internal/close';
+    }, true);
+    // Pages that rebuild their DOM can drop the bar; put it back.
+    setInterval(inject, 1000);
     document.addEventListener('DOMContentLoaded', inject);
     window.addEventListener('load', inject);
     inject();
@@ -282,6 +287,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let zoom_reset =
         MenuItem::with_id(app, "zoom-reset", "Actual Size", true, Some("CmdOrCtrl+0"))?;
     let quit = MenuItem::with_id(app, "quit", "Quit Google Chat", true, Some("CmdOrCtrl+Q"))?;
+    // Native, so it works even when a peek page hides the injected toolbar.
+    let close = MenuItem::with_id(app, "close", "Close", true, Some("CmdOrCtrl+W"))?;
 
     let icon_menu = Submenu::with_items(
         app,
@@ -366,7 +373,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &PredefinedMenuItem::minimize(app, None)?,
             &PredefinedMenuItem::maximize(app, None)?,
             &sep()?,
-            &PredefinedMenuItem::close_window(app, None)?,
+            &close,
         ],
     )?;
 
@@ -418,6 +425,18 @@ fn build_tray(app: &AppHandle, prefs: &Settings) -> tauri::Result<()> {
 fn handle_menu(app: &AppHandle, id: &str) {
     let main = app.get_webview_window("main");
     match id {
+        "close" => {
+            // Close the preview first; otherwise close the focused window.
+            if app.get_webview("peek").is_some() {
+                close_peek(app);
+            } else if let Some(w) = app
+                .webview_windows()
+                .into_values()
+                .find(|w| w.is_focused().unwrap_or(false))
+            {
+                let _ = w.close();
+            }
+        }
         "reload" => {
             if let Some(w) = main {
                 let _ = w.reload();

@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-17T00:00:00Z — claude/lucid-hawking-lcm0x0
+
+User reported a peek (rendered document preview) with no visible Close toolbar. Toolbar now appended to `documentElement` with a 1s re-inject; Escape listener is capture-phase on `window`; Window → Close is now a custom `CmdOrCtrl+W` item that closes the peek first, else the focused window. Verified `cargo clippy`/`cargo test` on Linux; not tested on macOS hardware.
+
 ### 2026-11-16T18:38:00Z — claude/affectionate-rubin-2noqud
 
 Release 1.4.29914238 (UTC-minute `Z=29914238`; `Y` bumped for the backward-compatible default-icon feature). Merged `origin/main` (1.3.29913701 peek fix) into `feature/release-1-4-29914238` off `development`; only `.agents/logs.md` conflicted and both entries were kept. WiX version `1.4.456.29822` = `floor(Z/65536).(Z%65536)`. Moved two icon bullets out of the 1.3.29913701 changelog section, since they were merged in as unreleased content. README download links now point to the 1.4.29914238 assets.
