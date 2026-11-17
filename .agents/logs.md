@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-17T14:34:00Z — claude/lucid-hawking-lcm0x0
+
+Release 1.4.29915434 (MSI `1.4.456.31018`). Bar icon PNGs had the white/black bar painted over the front bubble. Re-rendered from the SVG via headless Chromium (867px glyph centred on 1024px, matching `google-chat-color.png`), changing only the first `rect` fill.
+
 ### 2026-11-17T12:40:00Z — claude/lucid-hawking-lcm0x0
 
 Release 1.4.29915320 (MSI `1.4.456.30904`, patch). Multi-file attach: wry 0.57.1 honours `allowsMultipleSelection`, so Chat's input lacked `multiple` for this UA; added `MULTI_FILE_JS` (main window) that sets `multiple` on file inputs on click/showPicker. Not verified on macOS hardware.

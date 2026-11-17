@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.29915434 — 2026-11-17T14:34:00Z
+
+Patch release. UTC-minute identifier `29915434`; Windows MSI version `1.4.456.31018`. Fixes only.
+
+- Fix: the default "Match System" Dock/taskbar icon showed a blank white bubble. The bar-white and bar-dark icons are re-rendered from `google-chat-2026-square.svg`, recolouring only the back bar so the front bubble and smile stay intact.
+
 ## 1.4.29915320 — 2026-11-17T12:40:00Z
 
 Patch release. UTC-minute identifier `29915320`; Windows MSI version `1.4.456.30904`. Fixes only; no feature or breaking change.
