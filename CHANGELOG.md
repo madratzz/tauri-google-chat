@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.4.29915045 — 2026-11-17T08:05:34Z
+
+Patch-level release. UTC-minute identifier `29915045`; Windows MSI version `1.4.456.30629`. Y is unchanged: this is an icon fix, not a new feature.
 
 - Change: the bundled app icons (`icon.icns`, `icon.ico`, `icon.png`, and the 32, 64, 128, 256 and Square/Store PNGs) are regenerated from the 2026 Google Chat artwork with the same Dock-sized padding as the in-app icons. Previously the installed app's launcher icon filled its canvas edge to edge and used older artwork.
 
