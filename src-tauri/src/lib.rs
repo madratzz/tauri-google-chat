@@ -111,6 +111,26 @@ const MAIN_PEEK_CLOSE_JS: &str = r#"
 })();
 "#;
 
+/// Main-window script: Google Chat serves this user agent a single-file
+/// attachment picker. Mark every file input `multiple` just before it opens
+/// so several files can be attached at once (wry honours the flag).
+const MULTI_FILE_JS: &str = r#"
+(function() {
+    function multi(el) {
+        if (el && el.tagName === 'INPUT' && el.type === 'file' && !el.multiple && !el.hasAttribute('capture')) {
+            el.multiple = true;
+        }
+    }
+    var click = HTMLInputElement.prototype.click;
+    HTMLInputElement.prototype.click = function() { multi(this); return click.apply(this, arguments); };
+    var showPicker = HTMLInputElement.prototype.showPicker;
+    if (showPicker) {
+        HTMLInputElement.prototype.showPicker = function() { multi(this); return showPicker.apply(this, arguments); };
+    }
+    document.addEventListener('click', function(e) { multi(e.target); }, true);
+})();
+"#;
+
 /// Main-window script: shows an offline banner with Retry, and reloads when
 /// the connection returns.
 const OFFLINE_JS: &str = r#"
@@ -175,6 +195,7 @@ pub fn run() {
             .on_download(|webview, event| handle_download(webview.app_handle(), event))
             .initialization_script(OFFLINE_JS)
             .initialization_script(MAIN_PEEK_CLOSE_JS)
+            .initialization_script(MULTI_FILE_JS)
             .on_navigation({
                 let app = handle.clone();
                 move |nav_url| {

@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-17T12:40:00Z — claude/lucid-hawking-lcm0x0
+
+Release 1.4.29915320 (MSI `1.4.456.30904`, patch). Multi-file attach: wry 0.57.1 honours `allowsMultipleSelection`, so Chat's input lacked `multiple` for this UA; added `MULTI_FILE_JS` (main window) that sets `multiple` on file inputs on click/showPicker. Not verified on macOS hardware.
+
 ### 2026-11-17T00:00:00Z — claude/lucid-hawking-lcm0x0
 
 User reported a peek (rendered document preview) with no visible Close toolbar. Toolbar now appended to `documentElement` with a 1s re-inject; Escape listener is capture-phase on `window`; Window → Close is now a custom `CmdOrCtrl+W` item that closes the peek first, else the focused window. Verified `cargo clippy`/`cargo test` on Linux; not tested on macOS hardware.
