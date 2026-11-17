@@ -4,6 +4,10 @@ Last updated: 2026-11-09
 
 ## Current Session
 
+### 2026-11-17T07:40:00Z — claude/zen-mayer-h2izzc
+
+Regenerated the bundle launcher icons from `src-tauri/icons/google-chat-2026-square.svg`. The SVG was rendered in headless Chromium at 1024px, then the glyph was scaled to 85% width and centred on a transparent canvas, matching `google-chat-color.png`. `icon.icns` is a hand-built ICNS container (PNG entries, 16 to 1024px, including @2x); `icon.ico` has 16 to 256px frames; the PNGs are downscaled from the 1024px master. Verified the ICNS entry types and ICO frame sizes with Python and compared the result visually against the committed icon. Not yet checked on macOS Finder/Dock, Windows Explorer, or in a Tauri bundle build. Version numbers were left unchanged. `development` does not exist in this repository; work is on `claude/zen-mayer-h2izzc` per session instructions.
+
 ### 2026-11-16T18:38:00Z — claude/affectionate-rubin-2noqud
 
 Release 1.4.29914238 (UTC-minute `Z=29914238`; `Y` bumped for the backward-compatible default-icon feature). Merged `origin/main` (1.3.29913701 peek fix) into `feature/release-1-4-29914238` off `development`; only `.agents/logs.md` conflicted and both entries were kept. WiX version `1.4.456.29822` = `floor(Z/65536).(Z%65536)`. Moved two icon bullets out of the 1.3.29913701 changelog section, since they were merged in as unreleased content. README download links now point to the 1.4.29914238 assets.
