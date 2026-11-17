@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.29915320 — 2026-11-17T12:40:00Z
+
+Patch release. UTC-minute identifier `29915320`; Windows MSI version `1.4.456.30904`. Fixes only; no feature or breaking change.
+
+- Fix: attaching files only allowed one file at a time. File pickers in the main window now allow selecting several files.
+- Fix: some previews (e.g. rendered documents) hid the peek's Close toolbar, leaving no way to close them. The toolbar now attaches to `<html>` and re-injects itself, Escape in a peek always closes it, and Window → Close (Cmd/Ctrl+W) closes an open preview natively before closing a window.
+
 ## 1.4.29914238 — 2026-11-16T18:38:00Z
 
 Feature release. UTC-minute identifier `29914238`; Windows MSI version `1.4.456.29822`. Minor (`Y`) bump: it adds a backward-compatible default icon behaviour and new icon artwork; no breaking change.
